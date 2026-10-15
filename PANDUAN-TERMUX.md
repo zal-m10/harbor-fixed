@@ -60,14 +60,29 @@ print(json.load(urllib.request.urlopen(req, timeout=20)))
 
 ## 5. Proxy
 
-Satu proxy per baris di `tools/proxies.txt`, format:
+File `tools/proxies.txt` tidak ikut di repo (sengaja, karena berisi
+kredensial) — jadi buat sendiri. Satu proxy per baris, format:
 
 ```
 user:pass@host:port
 ```
 
+Dari dalam folder repo:
+
+```bash
+printf '%s\n' 'user:pass@host:port' > tools/proxies.txt
+chmod 600 tools/proxies.txt
+cat tools/proxies.txt
+```
+
 Kalau format proxymu `host:port:user:pass` (misal novaproxy), balik dulu
-menjadi `user:pass@host:port`. Cek proxy hidup:
+menjadi `user:pass@host:port`. Contoh novaproxy:
+
+```bash
+printf '%s\n' 'myuser-country-ID:mypass@residential-budget.novaproxy.io:9696' > tools/proxies.txt
+```
+
+Lalu cek proxy hidup:
 
 ```bash
 python -m tools.tokenharbor.cli check-proxies
