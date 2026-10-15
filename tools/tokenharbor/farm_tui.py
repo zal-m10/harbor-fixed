@@ -132,10 +132,11 @@ def _status_line(state: dict, proxies: list, tempik, capsolver) -> None:
         return "[bright_green]●[/bright_green]" if ok else "[bright_red]●[/bright_red]"
     proxy_txt = f"{len(proxies)} proxies" if proxies else "no proxy"
     console.print(
-        f"  {dot(bool(proxies))} [white]{proxy_txt}[/white]   "
+        f"{dot(bool(proxies))} [white]{proxy_txt}[/white]   "
         f"{dot(bool(tempik))} [white]tempik[/white]   "
         f"{dot(bool(capsolver))} [white]capsolver[/white]   "
-        f"[dim]│[/dim]   [dim]delay[/dim] [cyan]{state['delay']}s[/cyan]"
+        f"[dim]│[/dim]   [dim]delay[/dim] [cyan]{state['delay']}s[/cyan]",
+        justify="center",
     )
 
 
@@ -400,7 +401,7 @@ def main():
         menu.add_row("[5]", "Setup capsolver key", "captcha solver API key")
         menu.add_row("[6]", "Delay setting", f"currently {state['delay']}s")
         menu.add_row("[0]", "Exit", "")
-        console.print(menu)
+        console.print(menu, justify="center")
         console.print()
         choice = Prompt.ask("[dim]Select[/dim]", choices=["0", "1", "2", "3", "4", "5", "6"],
                             default="1", show_choices=False)
