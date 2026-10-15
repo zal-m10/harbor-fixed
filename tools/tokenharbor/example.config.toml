@@ -1,0 +1,24 @@
+# TokenHarbor Auto CLI Configuration
+# Copy this file to config.toml and fill in your values.
+# WARNING: config.toml is gitignored — do NOT commit real credentials!
+
+[tokenharbor]
+base_url = "https://tokenharbor.ai"
+turnstile_sitekey = "0x4AAAAAADBuC8Knz1EJZx9-"
+
+[tempik]
+# Self-host Tempik: https://github.com/hirotomasato/tempik
+base_url = "https://your-tempik-instance.com"
+
+[files]
+capsolver_key = "tools/.capsolver_key"
+proxy_list = "tools/proxies.txt"
+account_output = "account.json"
+
+[models]
+# Free models available on TokenHarbor
+free = [
+    "deepseek-v4-flash:free",
+    "mimo-v2.5:free",
+    "qwen3.8-27b:free",
+]

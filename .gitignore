@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Virtual env
+.venv/
+venv/
+
+# Sensitive — do NOT commit
+tools/.capsolver_key
+tools/proxyscrape_premium_http_proxies.txt
+tools/proxies.txt
+tools/tess.txt
+account.json
+*.account.json
+
+# Config with real credentials
+tools/tokenharbor/config.toml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
