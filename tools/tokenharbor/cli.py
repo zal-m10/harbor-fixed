@@ -613,6 +613,38 @@ def _run_status(email: str, password: str) -> int:
     return 0
 
 
+def _run_browser_farm(count: int, headed: bool = False) -> int:
+    """Full-auto farm: real Chromium signup + HTTP for the rest."""
+    _print_banner()
+    try:
+        from .browser_signup import auto_farm_one
+    except ImportError:
+        console.print("[red]Playwright is not installed.[/red]")
+        console.print("Install it with: [cyan]pip install playwright && playwright install chromium[/cyan]")
+        return 1
+
+    capsolver_key = _load_capsolver_key()
+    proxy = _load_random_proxy()
+    ok_count = 0
+    for i in range(count):
+        console.print(f"\n[bold cyan]═══ Account {i+1}/{count} ═══[/bold cyan]")
+        client = TokenHarborClient(capsolver_key=capsolver_key, proxy=proxy)
+        try:
+            result = auto_farm_one(client, headless=not headed)
+        except Exception as e:
+            console.print(f"[red]✗ Failed:[/red] {e}")
+            continue
+        if result.get("ok"):
+            ok_count += 1
+            console.print(f"[green]✓ {result['email']}[/green]")
+            console.print(f"  API key: [dim]{result['api_key'][:20]}...[/dim]")
+            _save_account(result)
+        else:
+            console.print(f"[red]✗ Failed at {result.get('stage')}:[/red] {result.get('error')}")
+    console.print(f"\n[bold]Done: {ok_count}/{count} accounts created.[/bold]")
+    return 0 if ok_count else 1
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # interactive menu
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -767,6 +799,12 @@ def _parse_args():
     p = sub.add_parser("status")
     p.add_argument("--email", required=True); p.add_argument("--password", required=True)
 
+    p = sub.add_parser("browser-farm",
+                       help="Full-auto farm via real Chromium (signup in browser, rest via HTTP)")
+    p.add_argument("--count", type=int, default=1, help="Accounts to farm")
+    p.add_argument("--headed", action="store_true",
+                   help="Show the browser window (default headless)")
+
     return parser.parse_args()
 
 
@@ -791,6 +829,8 @@ def main() -> int:
         return _run_check_proxies()
     elif args.command == "status":
         return _run_status(args.email, args.password)
+    elif args.command == "browser-farm":
+        return _run_browser_farm(args.count, headed=args.headed)
     else:
         return _interactive_menu()
 
