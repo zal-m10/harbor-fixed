@@ -37,12 +37,34 @@ def _proxy_config() -> Optional[dict]:
 
 def browser_signup(email: str, password: str,
                    headless: bool = True,
-                   timeout_ms: int = 120_000) -> dict:
+                   timeout_ms: int = 120_000,
+                   proxy: Optional[str] = None,
+                   verbose: bool = True) -> dict:
     """Run a real-browser signup. Returns {'ok', 'email', 'password', 'error'}."""
+    def log(msg: str):
+        if verbose:
+            print(f"    [browser] {msg}", flush=True)
+
+    # Proxy: explicit arg wins, else env (VM), else None (direct).
+    # Format: http://user:pass@host:port
+    pw_proxy = None
+    if proxy:
+        import re as _re
+        m = _re.match(r"(https?://)?([^:]+):([^@]+)@([^:]+):(\d+)", proxy)
+        if m:
+            _, user, pwd, host, port = m.groups()
+            pw_proxy = {"server": f"http://{host}:{port}",
+                        "username": user, "password": pwd}
+        else:
+            pw_proxy = {"server": proxy}
+    else:
+        pw_proxy = _proxy_config()
+
     with sync_playwright() as p:
+        log("launching Chromium ...")
         browser = p.chromium.launch(
             headless=headless,
-            proxy=_proxy_config(),
+            proxy=pw_proxy,
             args=[
                 "--disable-blink-features=AutomationControlled",
                 "--no-sandbox",
@@ -60,9 +82,20 @@ def browser_signup(email: str, password: str,
         ctx.add_init_script(STEALTH_JS)
         page = ctx.new_page()
         try:
+            log(f"opening {SIGNUP_URL} ...")
             page.goto(SIGNUP_URL, wait_until="domcontentloaded", timeout=60000)
+            log("page loaded, waiting for email field ...")
             # Fill the form fields.
-            page.wait_for_selector('input[type="email"]', timeout=30000)
+            try:
+                page.wait_for_selector('input[type="email"]', timeout=30000)
+            except PwTimeout:
+                # Diagnose: what is the page actually showing?
+                title = page.title()
+                body = page.evaluate("() => document.body.innerText.slice(0, 300)") or ""
+                log(f"FAIL: no email field. title={title!r} body={body[:150]!r}")
+                return {"ok": False, "email": email, "password": password,
+                        "error": f"signup form not loaded (title: {title})"}
+            log("filling credentials ...")
             page.fill('input[type="email"]', email)
             pw = page.query_selector('input[type="password"]')
             if pw:
@@ -70,6 +103,7 @@ def browser_signup(email: str, password: str,
 
             # Wait for Turnstile to auto-verify: the widget injects a hidden
             # input named cf-turnstile-response with a token value.
+            log("waiting for Turnstile auto-verify ...")
             token = None
             deadline = time.time() + 60
             while time.time() < deadline:
@@ -82,11 +116,11 @@ def browser_signup(email: str, password: str,
                 )
                 if token:
                     break
-                # If the widget asks for interaction, it shows a checkbox
-                # iframe; we cannot click inside it reliably, so just wait.
                 time.sleep(1.5)
+            log(f"turnstile token: {'OK' if token else 'MISSING (will submit anyway)'}")
 
             # Submit the form.
+            log("submitting ...")
             btn = page.query_selector('button[type="submit"]')
             if btn:
                 btn.click()
@@ -94,18 +128,20 @@ def browser_signup(email: str, password: str,
                 page.keyboard.press("Enter")
 
             # Success = redirect to /dashboard.
+            log("waiting for dashboard redirect ...")
             try:
                 page.wait_for_url("**/dashboard**", timeout=timeout_ms)
+                log("reached dashboard")
                 return {"ok": True, "email": email, "password": password,
                         "turnstile": bool(token)}
             except PwTimeout:
-                # Surface any visible error text for diagnosis.
                 err = page.evaluate(
                     """() => document.body.innerText.slice(0, 500)"""
                 )
                 m = re.search(r"(Something went wrong[^\n]{0,120}|"
                               r"already[^.\n]{0,80}|"
                               r"Invalid[^\n]{0,80})", err or "")
+                log(f"FAIL: {m.group(1) if m else 'no dashboard redirect'}")
                 return {"ok": False, "email": email, "password": password,
                         "error": m.group(1) if m else "no dashboard redirect"}
         finally:
@@ -113,7 +149,8 @@ def browser_signup(email: str, password: str,
             browser.close()
 
 
-def auto_farm_one(client, headless: bool = True) -> dict:
+def auto_farm_one(client, headless: bool = True,
+                  proxy: Optional[str] = None) -> dict:
     """Full automated pipeline: Tempik email -> browser signup ->
     verify -> login -> API key -> free models. Returns account dict."""
     import re as _re
@@ -124,7 +161,7 @@ def auto_farm_one(client, headless: bool = True) -> dict:
     email = inbox["address"] if isinstance(inbox, dict) else inbox
     password = _gen_password()
     print(f"[*] browser signup for {email} ...")
-    r = browser_signup(email, password, headless=headless)
+    r = browser_signup(email, password, headless=headless, proxy=proxy)
     if not r.get("ok"):
         return {"ok": False, "stage": "browser_signup", **r}
 

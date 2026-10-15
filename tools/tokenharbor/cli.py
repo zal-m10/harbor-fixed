@@ -613,7 +613,8 @@ def _run_status(email: str, password: str) -> int:
     return 0
 
 
-def _run_browser_farm(count: int, headed: bool = False) -> int:
+def _run_browser_farm(count: int, headed: bool = False,
+                      delay: int = 30) -> int:
     """Full-auto farm: real Chromium signup + HTTP for the rest."""
     _print_banner()
     try:
@@ -623,24 +624,30 @@ def _run_browser_farm(count: int, headed: bool = False) -> int:
         console.print("Install it with: [cyan]pip install playwright && playwright install chromium[/cyan]")
         return 1
 
+    import time as _time
     capsolver_key = _load_capsolver_key()
     proxy = _load_random_proxy()
+    if proxy:
+        console.print(f"  [dim]Browser proxy:[/dim] [cyan]{proxy.split('@')[-1]}[/cyan]")
     ok_count = 0
     for i in range(count):
         console.print(f"\n[bold cyan]═══ Account {i+1}/{count} ═══[/bold cyan]")
         client = TokenHarborClient(capsolver_key=capsolver_key, proxy=proxy)
         try:
-            result = auto_farm_one(client, headless=not headed)
+            result = auto_farm_one(client, headless=not headed, proxy=proxy)
         except Exception as e:
             console.print(f"[red]✗ Failed:[/red] {e}")
             continue
         if result.get("ok"):
             ok_count += 1
             console.print(f"[green]✓ {result['email']}[/green]")
-            console.print(f"  API key: [dim]{result['api_key'][:20]}...[/dim]")
+            console.print(f"  API key: [green]{result['api_key']}[/green]")
             _save_account(result)
         else:
             console.print(f"[red]✗ Failed at {result.get('stage')}:[/red] {result.get('error')}")
+        if i < count - 1 and delay > 0:
+            console.print(f"  [dim]Waiting {delay}s before next account (rate-limit safety)...[/dim]")
+            _time.sleep(delay)
     console.print(f"\n[bold]Done: {ok_count}/{count} accounts created.[/bold]")
     return 0 if ok_count else 1
 
@@ -804,6 +811,8 @@ def _parse_args():
     p.add_argument("--count", type=int, default=1, help="Accounts to farm")
     p.add_argument("--headed", action="store_true",
                    help="Show the browser window (default headless)")
+    p.add_argument("--delay", type=int, default=30,
+                   help="Seconds to wait between accounts (rate-limit safety)")
 
     return parser.parse_args()
 
@@ -830,7 +839,7 @@ def main() -> int:
     elif args.command == "status":
         return _run_status(args.email, args.password)
     elif args.command == "browser-farm":
-        return _run_browser_farm(args.count, headed=args.headed)
+        return _run_browser_farm(args.count, headed=args.headed, delay=args.delay)
     else:
         return _interactive_menu()
 
