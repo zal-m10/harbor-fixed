@@ -374,7 +374,7 @@ def main():
         console.print("[6] Delay setting")
         console.print("[0] Exit\n")
         choice = Prompt.ask("Select", choices=["0", "1", "2", "3", "4", "5", "6"],
-                            default="1")
+                            default="1", show_choices=False)
         if choice == "1":
             menu_run_farm()
         elif choice == "2":
