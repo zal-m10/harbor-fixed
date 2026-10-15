@@ -172,15 +172,30 @@ def menu_setup_capsolver():
 
 
 def menu_setup_proxy():
+    while True:
+        _clear_screen(); _header()
+        proxies = _get_proxies()
+        console.print(f"\n[bold]Proxy management[/bold] — [cyan]{len(proxies)}[/cyan] configured\n")
+        console.print("[1] Add proxy (bulk paste)")
+        console.print("[2] Select to delete (multi-select)")
+        console.print("[3] Delete all proxies")
+        console.print("[0] Back\n")
+        choice = Prompt.ask("Select", choices=["0", "1", "2", "3"],
+                            default="1", show_choices=False)
+        if choice == "1":
+            _proxy_add_bulk()
+        elif choice == "2":
+            _proxy_select_delete()
+        elif choice == "3":
+            _proxy_delete_all()
+        else:
+            return
+
+
+def _proxy_add_bulk():
     _clear_screen(); _header()
-    current = _get_proxies()
-    console.print(f"\nCurrent proxies: [cyan]{len(current)}[/cyan]")
-    for p in current:
-        masked = p.split("@")[-1] if "@" in p else p
-        console.print(f"  • {masked}")
     console.print("\n[dim]Format per line: user:pass@host:port[/dim]")
-    console.print("[dim]Paste proxies (one per line). Type DONE on its own line when finished.[/dim]")
-    console.print("[dim]Or type 'q' to cancel, empty line then DONE to clear.[/dim]\n")
+    console.print("[dim]Paste proxies (one per line). Type DONE on its own line when finished.[/dim]\n")
     lines = []
     while True:
         try:
@@ -194,19 +209,125 @@ def menu_setup_proxy():
         if line.upper() == "DONE":
             break
         if line:
-            # Also handle comma-separated on one line.
             for part in line.split(","):
                 part = part.strip()
                 if part and part.upper() != "DONE":
                     lines.append(part)
     if not lines:
-        if PROXY_PATH.exists():
-            PROXY_PATH.unlink()
-        console.print("[yellow]Proxies cleared.[/yellow]")
+        console.print("[dim]No proxies added.[/dim]")
     else:
-        _set_proxies(lines)
-        console.print(f"[green]{len(lines)} proxy/proxies saved.[/green]")
+        existing = _get_proxies()
+        _set_proxies(existing + lines)
+        console.print(f"[green]{len(lines)} proxy/proxies added ({len(existing) + len(lines)} total).[/green]")
     Prompt.ask("\nPress Enter to continue", default="")
+
+
+def _proxy_delete_all():
+    _clear_screen(); _header()
+    proxies = _get_proxies()
+    if not proxies:
+        console.print("\n[dim]No proxies to delete.[/dim]")
+        Prompt.ask("\nPress Enter to continue", default="")
+        return
+    if Confirm.ask(f"\n[red]Delete all {len(proxies)} proxies?[/red]", default=False):
+        PROXY_PATH.unlink()
+        console.print("[green]✓ All proxies deleted.[/green]")
+    else:
+        console.print("Cancelled.")
+    Prompt.ask("\nPress Enter to continue", default="")
+
+
+def _proxy_select_delete():
+    proxies = _get_proxies()
+    if not proxies:
+        _clear_screen(); _header()
+        console.print("\n[dim]No proxies to delete.[/dim]")
+        Prompt.ask("\nPress Enter to continue", default="")
+        return
+    selected = _curses_multiselect(
+        "Select proxies to delete (↑↓ navigate, SPACE toggle, ENTER delete, q cancel)",
+        proxies,
+    )
+    if selected is None:
+        return  # cancelled
+    if not selected:
+        _clear_screen(); _header()
+        console.print("\n[dim]Nothing selected.[/dim]")
+        Prompt.ask("\nPress Enter to continue", default="")
+        return
+    _clear_screen(); _header()
+    console.print(f"\n[red]Delete {len(selected)} selected proxy/proxies?[/red]")
+    for p in selected:
+        masked = p.split("@")[-1] if "@" in p else p
+        console.print(f"  • {masked}")
+    if Confirm.ask("", default=False):
+        remaining = [p for p in proxies if p not in selected]
+        if remaining:
+            _set_proxies(remaining)
+        elif PROXY_PATH.exists():
+            PROXY_PATH.unlink()
+        console.print(f"[green]✓ {len(selected)} deleted ({len(remaining)} remaining).[/green]")
+    else:
+        console.print("Cancelled.")
+    Prompt.ask("\nPress Enter to continue", default="")
+
+
+def _curses_multiselect(title: str, items: list) -> list | None:
+    """Interactive multi-select. Returns selected items, [] if none, None if cancelled."""
+    import curses
+
+    selected_idx = set()
+    cursor = 0
+    result = {"cancelled": False}
+
+    def draw(stdscr):
+        stdscr.clear()
+        h, w = stdscr.getmaxyx()
+        stdscr.addstr(0, 0, title[:w - 1], curses.A_BOLD)
+        stdscr.addstr(1, 0, f"{len(selected_idx)} selected", curses.A_DIM)
+        for i, item in enumerate(items):
+            y = i + 3
+            if y >= h - 1:
+                break
+            masked = item.split("@")[-1] if "@" in item else item
+            mark = "[x]" if i in selected_idx else "[ ]"
+            line = f"{mark} {masked}"
+            attr = curses.A_REVERSE if i == cursor else curses.A_NORMAL
+            try:
+                stdscr.addstr(y, 2, line[:w - 4], attr)
+            except curses.error:
+                pass
+        stdscr.refresh()
+
+    def loop(stdscr):
+        nonlocal cursor
+        curses.curs_set(0)
+        stdscr.keypad(True)
+        while True:
+            draw(stdscr)
+            key = stdscr.getch()
+            if key == curses.KEY_UP:
+                cursor = (cursor - 1) % len(items)
+            elif key == curses.KEY_DOWN:
+                cursor = (cursor + 1) % len(items)
+            elif key == ord(" "):
+                if cursor in selected_idx:
+                    selected_idx.discard(cursor)
+                else:
+                    selected_idx.add(cursor)
+            elif key in (curses.KEY_ENTER, 10, 13):
+                break
+            elif key in (ord("q"), ord("Q"), 27):  # q / Esc
+                result["cancelled"] = True
+                break
+
+    try:
+        curses.wrapper(loop)
+    except Exception:
+        return None
+    if result["cancelled"]:
+        return None
+    return [items[i] for i in sorted(selected_idx)]
 
 
 def menu_setup_tempik():
