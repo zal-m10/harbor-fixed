@@ -88,16 +88,22 @@ def _set_tempik_url(url: str) -> None:
     CONFIG_PATH.write_text("\n".join(lines))
 
 
-def _get_proxy() -> str | None:
+def _get_proxies() -> list:
+    """Return all configured proxies (one per line)."""
     if PROXY_PATH.exists():
-        p = PROXY_PATH.read_text().strip().splitlines()
-        p = [x.strip() for x in p if x.strip() and not x.strip().startswith("#")]
-        return p[0] if p else None
-    return None
+        lines = PROXY_PATH.read_text().strip().splitlines()
+        return [x.strip() for x in lines
+                if x.strip() and not x.strip().startswith("#")]
+    return []
 
 
-def _set_proxy(proxy: str) -> None:
-    PROXY_PATH.write_text(proxy.strip() + "\n")
+def _get_proxy() -> str | None:
+    proxies = _get_proxies()
+    return proxies[0] if proxies else None
+
+
+def _set_proxies(proxies: list) -> None:
+    PROXY_PATH.write_text("\n".join(p.strip() for p in proxies if p.strip()) + "\n")
 
 
 def _clear_screen():
@@ -143,21 +149,30 @@ def menu_setup_capsolver():
 
 def menu_setup_proxy():
     _clear_screen(); _header()
-    current = _get_proxy()
-    masked = (current.split("@")[-1] if current and "@" in current
-              else (current or "-"))
-    console.print(f"\nCurrent proxy: [cyan]{masked}[/cyan]")
-    console.print("[dim]Format: user:pass@host:port[/dim]\n")
-    val = Prompt.ask("Enter proxy (empty to clear, 'q' to cancel)")
+    current = _get_proxies()
+    console.print(f"\nCurrent proxies: [cyan]{len(current)}[/cyan]")
+    for p in current:
+        masked = p.split("@")[-1] if "@" in p else p
+        console.print(f"  • {masked}")
+    console.print("\n[dim]Format per line: user:pass@host:port[/dim]")
+    console.print("[dim]Enter multiple proxies separated by comma or one per line.[/dim]")
+    console.print("[dim]Type a single line, then Enter. For more lines, separate with commas.[/dim]\n")
+    val = Prompt.ask("Enter proxy/proxies (empty to clear, 'q' to cancel)")
     if val.lower() == "q":
         return
     if not val.strip():
         if PROXY_PATH.exists():
             PROXY_PATH.unlink()
-        console.print("[yellow]Proxy cleared.[/yellow]")
+        console.print("[yellow]Proxies cleared.[/yellow]")
     else:
-        _set_proxy(val)
-        console.print("[green]Proxy saved.[/green]")
+        # Split by comma or newline, clean up.
+        proxies = []
+        for part in val.replace("\n", ",").split(","):
+            part = part.strip()
+            if part:
+                proxies.append(part)
+        _set_proxies(proxies)
+        console.print(f"[green]{len(proxies)} proxy/proxies saved.[/green]")
     Prompt.ask("\nPress Enter to continue", default="")
 
 
@@ -203,19 +218,22 @@ def menu_run_farm():
         Prompt.ask("\nPress Enter to continue", default="")
         return
 
-    proxy = _get_proxy()
-    if not proxy:
+    proxies = _get_proxies()
+    if not proxies:
         console.print("\n[yellow]⚠ No proxy configured.[/yellow]")
         if not Confirm.ask("Run without proxy?", default=False):
-            console.print("Cancelled. Set a proxy via [cyan]Setup proxy[/cyan].")
+            console.print("Cancelled. Set proxies via [cyan]Setup proxy[/cyan].")
             Prompt.ask("\nPress Enter to continue", default="")
             return
+        proxy_info = "no"
+    else:
+        proxy_info = f"{len(proxies)} (rotating)"
 
     state = _load_state()
     count = IntPrompt.ask("\nHow many accounts to farm?", default=1)
     delay = state.get("delay", DEFAULT_DELAY)
     console.print(f"\n[dim]Tempik: {tempik}[/dim]")
-    console.print(f"[dim]Proxy: {'yes' if proxy else 'no'}[/dim]")
+    console.print(f"[dim]Proxy: {proxy_info}[/dim]")
     console.print(f"[dim]Delay: {delay}s[/dim]\n")
 
     if not Confirm.ask(f"Start farming {count} account(s)?", default=True):
@@ -331,10 +349,11 @@ def main():
     while True:
         _clear_screen(); _header()
         state = _load_state()
-        proxy = _get_proxy()
+        proxies = _get_proxies()
         tempik = _get_tempik_url()
         capsolver = _get_capsolver()
-        console.print(f"\n[dim]proxy:[/dim] {'[green]set[/green]' if proxy else '[red]not set[/red]'}"
+        proxy_status = f"[green]{len(proxies)} set[/green]" if proxies else "[red]not set[/red]"
+        console.print(f"\n[dim]proxy:[/dim] {proxy_status}"
                       f"  [dim]tempik:[/dim] {'[green]set[/green]' if tempik else '[red]not set[/red]'}"
                       f"  [dim]capsolver:[/dim] {'[green]set[/green]' if capsolver else '[red]not set[/red]'}"
                       f"  [dim]delay:[/dim] [cyan]{state['delay']}s[/cyan]\n")

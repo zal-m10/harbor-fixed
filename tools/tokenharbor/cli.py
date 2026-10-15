@@ -626,11 +626,17 @@ def _run_browser_farm(count: int, headed: bool = False,
 
     import time as _time
     capsolver_key = _load_capsolver_key()
-    proxy = _load_random_proxy()
-    if proxy:
-        console.print(f"  [dim]Browser proxy:[/dim] [cyan]{proxy.split('@')[-1]}[/cyan]")
+    proxies = _load_all_proxies()
+    if proxies:
+        console.print(f"  [dim]Proxies loaded:[/dim] [cyan]{len(proxies)}[/cyan] [dim](rotating per account)[/dim]")
+    else:
+        console.print("  [yellow]No proxies — running direct.[/yellow]")
     ok_count = 0
     for i in range(count):
+        # Rotate proxy per account (round-robin).
+        proxy = proxies[i % len(proxies)] if proxies else None
+        if proxy:
+            console.print(f"  [dim]Using proxy:[/dim] [cyan]{proxy.split('@')[-1]}[/cyan]")
         console.print(f"\n[bold cyan]═══ Account {i+1}/{count} ═══[/bold cyan]")
         result = None
         # Retry once on rate-limit with a longer cooldown.
