@@ -111,9 +111,26 @@ def _clear_screen():
 
 
 def _header():
+    console.print()
     console.print(Panel(
-        "[bold cyan]TokenHarbor Farm[/bold cyan] — interactive menu",
-        style="cyan", expand=False))
+        "[bold bright_cyan]TokenHarbor Farm[/bold bright_cyan]\n"
+        "[dim]automated account farming[/dim]",
+        style="bright_cyan",
+        expand=False,
+        padding=(0, 3),
+    ))
+
+
+def _status_line(state: dict, proxies: list, tempik, capsolver) -> None:
+    def dot(ok: bool) -> str:
+        return "[bright_green]●[/bright_green]" if ok else "[bright_red]●[/bright_red]"
+    proxy_txt = f"{len(proxies)} proxies" if proxies else "no proxy"
+    console.print(
+        f"  {dot(bool(proxies))} [white]{proxy_txt}[/white]   "
+        f"{dot(bool(tempik))} [white]tempik[/white]   "
+        f"{dot(bool(capsolver))} [white]capsolver[/white]   "
+        f"[dim]│[/dim]   [dim]delay[/dim] [cyan]{state['delay']}s[/cyan]"
+    )
 
 
 def _get_capsolver() -> str | None:
@@ -356,30 +373,30 @@ def _delete_results() -> None:
 
 def main():
     while True:
-        _clear_screen(); _header()
+        _clear_screen()
+        _header()
         state = _load_state()
         proxies = _get_proxies()
         tempik = _get_tempik_url()
         capsolver = _get_capsolver()
-        proxy_status = f"[green]{len(proxies)} set[/green]" if proxies else "[red]not set[/red]"
-        tempik_status = "[green]set[/green]" if tempik else "[red]not set[/red]"
-        capsolver_status = "[green]set[/green]" if capsolver else "[red]not set[/red]"
+
+        _status_line(state, proxies, tempik, capsolver)
         console.print()
-        console.print("[1] Run farm")
-        console.print("[2] Results")
-        console.print("[3] Setup proxy")
-        console.print("[4] Setup tempik")
-        console.print("[5] Setup capsolver key")
-        console.print("[6] Delay setting")
-        console.print("[0] Exit\n")
-        console.print(Panel(
-            f"[dim]proxy:[/dim] {proxy_status}  "
-            f"[dim]tempik:[/dim] {tempik_status}  "
-            f"[dim]capsolver:[/dim] {capsolver_status}  "
-            f"[dim]delay:[/dim] [cyan]{state['delay']}s[/cyan]",
-            style="dim", expand=False))
+
+        menu = Table(show_header=False, box=None, padding=(0, 2))
+        menu.add_column("key", style="bold bright_cyan", width=5, justify="right")
+        menu.add_column("label", style="white")
+        menu.add_column("hint", style="dim")
+        menu.add_row("[1]", "Run farm", "start farming accounts")
+        menu.add_row("[2]", "Results", "view farmed accounts")
+        menu.add_row("[3]", "Setup proxy", f"{len(proxies)} configured" if proxies else "not configured")
+        menu.add_row("[4]", "Setup tempik", "disposable email URL")
+        menu.add_row("[5]", "Setup capsolver key", "captcha solver API key")
+        menu.add_row("[6]", "Delay setting", f"currently {state['delay']}s")
+        menu.add_row("[0]", "Exit", "")
+        console.print(menu)
         console.print()
-        choice = Prompt.ask("Select", choices=["0", "1", "2", "3", "4", "5", "6"],
+        choice = Prompt.ask("[dim]Select[/dim]", choices=["0", "1", "2", "3", "4", "5", "6"],
                             default="1", show_choices=False)
         if choice == "1":
             menu_run_farm()
