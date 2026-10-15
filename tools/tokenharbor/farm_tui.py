@@ -20,7 +20,7 @@ console = Console()
 
 REPO_DIR = Path(__file__).resolve().parent.parent.parent
 CONFIG_PATH = Path(__file__).resolve().parent / "config.toml"
-PROXY_PATH = Path(__file__).resolve().parent / "proxies.txt"
+PROXY_PATH = REPO_DIR / "tools" / "proxies.txt"
 CAPSOLVER_PATH = Path(__file__).resolve().parent / ".capsolver_key"
 RESULTS_PATH = REPO_DIR / "account.json"
 TUI_STATE = Path.home() / ".farm_tui.json"
