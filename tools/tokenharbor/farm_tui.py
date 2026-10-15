@@ -604,8 +604,8 @@ def main():
         menu.add_row("[0]", "Exit", "")
         console.print(menu, justify="center")
         console.print()
-        choice = Prompt.ask("[dim]Select[/dim]", choices=["0", "1", "2", "3", "4", "5", "6"],
-                            default="1", show_choices=False)
+        choice = Prompt.ask("    [dim]Select Action[/dim]", choices=["0", "1", "2", "3", "4", "5", "6"],
+                            default="1", show_choices=False, show_default=False)
         if choice == "1":
             menu_run_farm()
         elif choice == "2":
