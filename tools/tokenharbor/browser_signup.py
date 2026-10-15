@@ -84,6 +84,22 @@ def browser_signup(email: str, password: str,
         try:
             log(f"opening {SIGNUP_URL} ...")
             page.goto(SIGNUP_URL, wait_until="domcontentloaded", timeout=60000)
+            # The site may land on the Sign in tab; explicitly switch to Sign up.
+            log("ensuring Sign up tab is active ...")
+            try:
+                signup_tab = page.query_selector(
+                    'button:has-text("Sign up"), [role="tab"]:has-text("Sign up"),'
+                    ' a:has-text("Sign up")')
+                if signup_tab:
+                    # Only click if it looks like a tab that's not active.
+                    page.evaluate(
+                        """(el) => {
+                            const txt = (el.innerText || '').trim();
+                            if (txt.toLowerCase() === 'sign up') el.click();
+                        }""", signup_tab)
+                    page.wait_for_timeout(2000)
+            except Exception:
+                pass
             log("page loaded, waiting for email field ...")
             # Fill the form fields.
             try:
