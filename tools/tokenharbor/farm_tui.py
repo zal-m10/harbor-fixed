@@ -468,11 +468,15 @@ def menu_results():
             console.print(f"  • {a.get('email', '?')}: "
                           f"{a.get('stage', '?')} — {a.get('error', '?')}")
 
-    # Sub-menu: copy keys / delete results / background log (horizontal).
+    # Sub-menu: use Text to avoid Rich parsing [c]/[d]/[b] as color tags.
+    from rich.text import Text as _Text
     console.print()
-    actions = ""
+    bar = _Text()
     if ok:
-        actions += "[cyan]\\[c][/cyan] Copy all API keys  [cyan]\\[d][/cyan] Delete all results  "
+        bar.append("[c] ", style="bold cyan")
+        bar.append("Copy all API keys  ")
+        bar.append("[d] ", style="bold cyan")
+        bar.append("Delete all results  ")
     pidfile = Path("/tmp/farm.pid")
     bg_running = False
     if pidfile.exists():
@@ -484,9 +488,11 @@ def menu_results():
             pass
     has_logs = bool(list(Path("/tmp").glob("farm-*.log")))
     if bg_running or has_logs:
-        actions += "[cyan]\\[b][/cyan] Background log  "
-    actions += "[cyan]\\[Enter][/cyan] Back to menu"
-    console.print(actions)
+        bar.append("[b] ", style="bold cyan")
+        bar.append("Background log  ")
+    bar.append("[Enter] ", style="bold cyan")
+    bar.append("Back to menu")
+    console.print(bar)
     choices = ["c", "d", "b", ""] if ok else (["b", ""] if (bg_running or has_logs) else [""])
     action = Prompt.ask("Action", choices=choices,
                         default="", show_choices=False)
