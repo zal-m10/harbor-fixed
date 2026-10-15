@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import re
 import time
+import urllib.parse
 import uuid
 import base64
 import tomllib
@@ -90,9 +91,18 @@ class TokenHarborClient:
         return None
 
     def _extract_action_hash(self, html: str) -> Optional[str]:
+        # New format (plain-HTML form): $ACTION_1:0 = {"id":"<hash>","bound":"$@1"}
+        m = re.search(r'\$ACTION_1:0" value="\{&quot;id&quot;:&quot;([a-f0-9]{40,50})', html)
+        if m:
+            return m.group(1)
         for m in re.findall(r"[a-f0-9]{40,50}", html):
             return m
         return None
+
+    def _extract_action_key(self, html: str) -> Optional[str]:
+        """Extract the $ACTION_KEY hidden input value (new form format)."""
+        m = re.search(r'ACTION_KEY"[^>]*value="([^"]+)"', html)
+        return m.group(1) if m else None
 
     def _ensure_deployment_info(self) -> str:
         """Fetch and cache deployment ID + action hashes."""
@@ -280,7 +290,92 @@ class TokenHarborClient:
         result = self._call_server_action(self._signin_action_hash, fields, mode="signin")
         if result.get("ok"):
             self._access_token = self._extract_access_token()
-        return result
+            return result
+        # Fallback: the signIn server action currently throws HTTP 500 for any
+        # input. Authenticate directly against Supabase Auth (same backend the
+        # site uses) and install the session cookies the SSR client expects.
+        return self._supabase_login(email, password)
+
+    # Public Supabase anon key embedded in the site's client JS (safe to ship;
+    # used only to talk to the site's own auth endpoint). Refreshed dynamically
+    # when possible; this is the fallback.
+    _SUPABASE_ANON_FALLBACK = (
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIs"
+        "InJlZiI6ImlzYm56bXdqbXRpdWlwZXNnbW1nIiwicm9sZSI6ImFub24iLCJp"
+        "YXQiOjE3NzY3NjU1MzYsImV4cCI6MjA5MjM0MTUzNn0.CodUcchio6jNW_k6"
+        "8vaAb--LshBQXK51tZ6VTxNSz_A"
+    )
+
+    def _supabase_anon_key(self) -> Optional[str]:
+        """Extract the Supabase anon key from the site's JS bundle."""
+        if getattr(self, "_anon_key", None):
+            return self._anon_key
+        try:
+            r = self._get(f"{BASE_URL}/login", timeout=30)
+            for m in re.finditer(r"(/_next/static/(?:immutable/)?chunks/[a-z0-9_./-]+\.js)", r.text):
+                jr = self._get(f"{BASE_URL}{m.group(1)}", timeout=30)
+                if jr.status_code != 200 or "supabase" not in jr.text.lower():
+                    continue
+                km = re.search(
+                    r"eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}",
+                    jr.text,
+                )
+                if km:
+                    self._anon_key = km.group(0)
+                    return self._anon_key
+        except Exception:
+            pass
+        self._anon_key = self._SUPABASE_ANON_FALLBACK
+        return self._anon_key
+
+    def _supabase_login(self, email: str, password: str) -> dict:
+        """Direct Supabase password-grant login; sets SSR chunked cookies."""
+        anon = self._supabase_anon_key()
+        if not anon:
+            return {"ok": False, "error": "could not obtain Supabase anon key"}
+        try:
+            r = self._post(
+                "https://auth.tokenharbor.ai/auth/v1/token?grant_type=password",
+                headers={"apikey": anon, "Content-Type": "application/json"},
+                json={"email": email, "password": password},
+                timeout=30,
+            )
+        except Exception as e:
+            return {"ok": False, "error": f"supabase auth request failed: {e}"}
+        if r.status_code != 200:
+            return {"ok": False, "error": f"supabase auth HTTP {r.status_code}"}
+        d = r.json()
+        sess = {
+            "access_token": d["access_token"],
+            "refresh_token": d["refresh_token"],
+            "expires_at": d.get("expires_at"),
+            "expires_in": d.get("expires_in"),
+            "token_type": "bearer",
+            "user": d["user"],
+        }
+        # Cookie name derives from the auth hostname: sb-<host[0]>-auth-token.
+        # Value: "base64-" + base64url(JSON), chunked like @supabase/ssr.
+        j = json.dumps(sess, separators=(",", ":"))
+        s = "base64-" + base64.urlsafe_b64encode(j.encode()).decode().rstrip("=")
+        enc = urllib.parse.quote(s, safe="")
+        name = "sb-auth-auth-token"
+        if len(enc) <= 3180:
+            self.session.cookies.set(name, s, domain="tokenharbor.ai", path="/")
+        else:
+            i, idx = 0, 0
+            while i < len(enc):
+                e = enc[i : i + 3180]
+                t = e.rfind("%")
+                if t > len(e) - 3:
+                    e = e[:t]
+                self.session.cookies.set(
+                    f"{name}.{idx}", urllib.parse.unquote(e),
+                    domain="tokenharbor.ai", path="/",
+                )
+                i += len(e)
+                idx += 1
+        self._access_token = d["access_token"]
+        return {"ok": True, "via": "supabase-direct"}
 
     def _extract_access_token(self) -> Optional[str]:
         """Extract access token from Supabase chunked cookies."""
