@@ -268,6 +268,62 @@ def menu_results():
         for a in fail:
             console.print(f"  • {a.get('email', '?')}: "
                           f"{a.get('stage', '?')} — {a.get('error', '?')}")
+
+    # Sub-menu: copy keys / delete results.
+    if ok:
+        console.print("\n[dim]--- actions ---[/dim]")
+        console.print("[c] Copy all API keys (keys only)")
+        console.print("[d] Delete all results")
+        console.print("[Enter] Back to menu")
+        action = Prompt.ask("Action", choices=["c", "d", ""],
+                            default="", show_choices=False)
+        if action == "c":
+            _copy_keys(ok)
+        elif action == "d":
+            _delete_results()
+    else:
+        Prompt.ask("\nPress Enter to continue", default="")
+
+
+def _copy_keys(accounts: list) -> None:
+    keys = [a.get("api_key", "") for a in accounts if a.get("api_key")]
+    text = "\n".join(keys)
+    copied = False
+    # Try system clipboard.
+    for cmd in (["xclip", "-selection", "clipboard"],
+                ["xsel", "--clipboard", "--input"]):
+        try:
+            subprocess.run(cmd, input=text.encode(), timeout=5,
+                           capture_output=True)
+            copied = True
+            break
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            continue
+    # Always also save to a file for easy retrieval over SSH.
+    keys_file = REPO_DIR / "keys.txt"
+    keys_file.write_text(text + "\n")
+    console.print(f"\n[green]✓ {len(keys)} keys ready.[/green]")
+    if copied:
+        console.print("[dim]Copied to clipboard.[/dim]")
+    console.print(f"[dim]Also saved to: {keys_file}[/dim]")
+    console.print("\n[bold]Keys:[/bold]")
+    for k in keys:
+        console.print(f"  {k}")
+    Prompt.ask("\nPress Enter to continue", default="")
+
+
+def _delete_results() -> None:
+    if not Confirm.ask("\n[red]Delete ALL farm results (emails + keys)?[/red]",
+                       default=False):
+        console.print("Cancelled.")
+        Prompt.ask("\nPress Enter to continue", default="")
+        return
+    if RESULTS_PATH.exists():
+        RESULTS_PATH.unlink()
+    keys_file = REPO_DIR / "keys.txt"
+    if keys_file.exists():
+        keys_file.unlink()
+    console.print("[green]✓ All results deleted.[/green]")
     Prompt.ask("\nPress Enter to continue", default="")
 
 
