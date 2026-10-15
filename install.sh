@@ -45,6 +45,7 @@ fi
 echo "[5/5] Installing 'farm' command..."
 FARM_BIN="/usr/local/bin/farm"
 FARM_SCRIPT="#!/bin/bash
+cd \"$INSTALL_DIR\" || exit 1
 exec \"$INSTALL_DIR/.venv/bin/python\" -m tools.tokenharbor.farm_tui \"\$@\"
 "
 if [ -w /usr/local/bin ]; then
