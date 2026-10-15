@@ -110,15 +110,21 @@ def _clear_screen():
     console.clear()
 
 
+TUI_BANNER = r"""
+[bold cyan]
+  ███████╗ █████╗ ██████╗ ███╗   ███╗
+  ██╔════╝██╔══██╗██╔══██╗████╗ ████║
+  █████╗  ███████║██████╔╝██╔████╔██║
+  ██╔══╝  ██╔══██║██╔══██╗██║╚██╔╝██║
+  ██║     ██║  ██║██║  ██║██║ ╚═╝ ██║
+  ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝
+[/bold cyan]
+[bold bright_cyan]      TokenHarbor Farm — Interactive TUI[/bold bright_cyan]
+"""
+
+
 def _header():
-    console.print()
-    console.print(Panel(
-        "[bold bright_cyan]TokenHarbor Farm[/bold bright_cyan]\n"
-        "[dim]automated account farming[/dim]",
-        style="bright_cyan",
-        expand=False,
-        padding=(0, 3),
-    ))
+    console.print(TUI_BANNER)
 
 
 def _status_line(state: dict, proxies: list, tempik, capsolver) -> None:
