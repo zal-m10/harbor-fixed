@@ -362,10 +362,15 @@ def main():
         tempik = _get_tempik_url()
         capsolver = _get_capsolver()
         proxy_status = f"[green]{len(proxies)} set[/green]" if proxies else "[red]not set[/red]"
-        console.print(f"\n[dim]proxy:[/dim] {proxy_status}"
-                      f"  [dim]tempik:[/dim] {'[green]set[/green]' if tempik else '[red]not set[/red]'}"
-                      f"  [dim]capsolver:[/dim] {'[green]set[/green]' if capsolver else '[red]not set[/red]'}"
-                      f"  [dim]delay:[/dim] [cyan]{state['delay']}s[/cyan]\n")
+        tempik_status = "[green]set[/green]" if tempik else "[red]not set[/red]"
+        capsolver_status = "[green]set[/green]" if capsolver else "[red]not set[/red]"
+        console.print(Panel(
+            f"[dim]proxy:[/dim] {proxy_status}  "
+            f"[dim]tempik:[/dim] {tempik_status}  "
+            f"[dim]capsolver:[/dim] {capsolver_status}  "
+            f"[dim]delay:[/dim] [cyan]{state['delay']}s[/cyan]",
+            style="dim", expand=False))
+        console.print()
         console.print("[1] Run farm")
         console.print("[2] Results")
         console.print("[3] Setup proxy")
