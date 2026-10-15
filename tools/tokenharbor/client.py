@@ -133,6 +133,9 @@ class TokenHarborClient:
                     "type": "AntiTurnstileTaskProxyLess",
                     "websiteURL": page_url,
                     "websiteKey": TURNSTILE_SITEKEY,
+                    # Must match the widget's action param ("signup") or
+                    # server-side verification rejects the token.
+                    "metadata": {"action": "signup"},
                 },
             },
             timeout=15,

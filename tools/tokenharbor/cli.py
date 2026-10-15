@@ -314,11 +314,10 @@ def _run_full_setup(email: Optional[str] = None, password: Optional[str] = None)
         console.print(f"[red]✗ Capsolver key not found at {_CAPSOLVER_KEY_FILE}[/red]")
         return 1
 
-    # check & pick working proxy
+    # check & pick working proxy (optional — continue direct if none)
     proxy = _pick_working_proxy_interactive()
     if proxy is None:
-        console.print("[red]✗ No working proxy available[/red]")
-        return 1
+        console.print("[yellow]⚠ No working proxy — continuing WITHOUT proxy (direct connection)[/yellow]")
 
     with Progress(
         SpinnerColumn(),
@@ -382,14 +381,15 @@ def _run_batch(count: int) -> int:
     console.print(f"  [dim]Accounts to create:[/dim] {count}")
     console.print()
 
-    # pre-check all proxies
+    # pre-check all proxies (optional — continue direct if none)
     console.print("[bold cyan]Checking proxies...[/bold cyan]")
     all_proxies = _load_all_proxies()
     alive, dead = _check_all_proxies(all_proxies)
     if not alive:
-        console.print(f"[red]✗ All {len(dead)} proxies are dead![/red]")
-        return 1
-    console.print(f"  [green]✓ {len(alive)} alive[/green]  [red]✗ {len(dead)} dead[/red]")
+        console.print("[yellow]⚠ No working proxy — continuing WITHOUT proxy (direct connection)[/yellow]")
+        alive = [None]
+    else:
+        console.print(f"  [green]✓ {len(alive)} alive[/green]  [red]✗ {len(dead)} dead[/red]")
     console.print()
 
     accounts: list[dict] = []
