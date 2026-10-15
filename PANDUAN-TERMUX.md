@@ -17,6 +17,11 @@ cd harbor-fixed
 cp tools/tokenharbor/example.config.toml tools/tokenharbor/config.toml
 ```
 
+> **Penting:** semua perintah di bawah ini harus dijalankan dari dalam
+> folder `harbor-fixed`. Kalau prompt terminal tidak menunjukkan kamu di
+> dalam folder itu, masuk dulu dengan `cd harbor-fixed` (sesuaikan path
+> kalau kamu clone di lokasi lain).
+
 ## 3. Isi config
 
 Edit `tools/tokenharbor/config.toml`, bagian `[tempik]` — ganti dengan URL
@@ -29,11 +34,15 @@ base_url = "https://tempik.domain-kamu.com"
 
 ## 4. Capsolver key
 
-Simpan API key Capsolver di `tools/.capsolver_key` (satu baris):
+Pastikan kamu di dalam folder `harbor-fixed` dulu (`pwd` harus berakhiran
+`harbor-fixed`), lalu simpan API key Capsolver di `tools/.capsolver_key`
+(satu baris):
 
 ```bash
+pwd
 printf '%s\n' 'CAP-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' > tools/.capsolver_key
 chmod 600 tools/.capsolver_key
+ls -l tools/.capsolver_key
 ```
 
 Cek balance dulu (gratis, tidak memotong saldo):
@@ -100,3 +109,17 @@ python -m tools.tokenharbor.cli enable-free --email x --password y
   ini, server memanggil `signUp(undefined, undefined, formData)` sehingga
   email/password terbaca kosong dan signup selalu gagal dengan error
   "Email and password are required."
+
+## Troubleshooting
+
+**`bash: tools/.capsolver_key: No such file or directory`**
+(kadang juga untuk `tools/proxies.txt`)
+
+Penyebab: perintah dijalankan di luar folder repo. Solusi:
+
+```bash
+cd harbor-fixed   # sesuaikan path kalau beda
+pwd               # pastikan berakhiran "harbor-fixed"
+```
+
+lalu ulangi perintahnya.
