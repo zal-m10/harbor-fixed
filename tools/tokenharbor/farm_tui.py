@@ -155,24 +155,33 @@ def menu_setup_proxy():
         masked = p.split("@")[-1] if "@" in p else p
         console.print(f"  • {masked}")
     console.print("\n[dim]Format per line: user:pass@host:port[/dim]")
-    console.print("[dim]Enter multiple proxies separated by comma or one per line.[/dim]")
-    console.print("[dim]Type a single line, then Enter. For more lines, separate with commas.[/dim]\n")
-    val = Prompt.ask("Enter proxy/proxies (empty to clear, 'q' to cancel)")
-    if val.lower() == "q":
-        return
-    if not val.strip():
+    console.print("[dim]Paste proxies (one per line). Type DONE on its own line when finished.[/dim]")
+    console.print("[dim]Or type 'q' to cancel, empty line then DONE to clear.[/dim]\n")
+    lines = []
+    while True:
+        try:
+            line = input("proxy> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            console.print("\n[yellow]Cancelled.[/yellow]")
+            Prompt.ask("\nPress Enter to continue", default="")
+            return
+        if line.lower() == "q" and not lines:
+            return
+        if line.upper() == "DONE":
+            break
+        if line:
+            # Also handle comma-separated on one line.
+            for part in line.split(","):
+                part = part.strip()
+                if part and part.upper() != "DONE":
+                    lines.append(part)
+    if not lines:
         if PROXY_PATH.exists():
             PROXY_PATH.unlink()
         console.print("[yellow]Proxies cleared.[/yellow]")
     else:
-        # Split by comma or newline, clean up.
-        proxies = []
-        for part in val.replace("\n", ",").split(","):
-            part = part.strip()
-            if part:
-                proxies.append(part)
-        _set_proxies(proxies)
-        console.print(f"[green]{len(proxies)} proxy/proxies saved.[/green]")
+        _set_proxies(lines)
+        console.print(f"[green]{len(lines)} proxy/proxies saved.[/green]")
     Prompt.ask("\nPress Enter to continue", default="")
 
 
