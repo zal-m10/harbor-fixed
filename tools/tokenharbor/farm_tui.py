@@ -21,6 +21,7 @@ console = Console()
 REPO_DIR = Path(__file__).resolve().parent.parent.parent
 CONFIG_PATH = Path(__file__).resolve().parent / "config.toml"
 PROXY_PATH = Path(__file__).resolve().parent / "proxies.txt"
+CAPSOLVER_PATH = Path(__file__).resolve().parent / ".capsolver_key"
 RESULTS_PATH = REPO_DIR / "account.json"
 TUI_STATE = Path.home() / ".farm_tui.json"
 
@@ -109,6 +110,37 @@ def _header():
         style="cyan", expand=False))
 
 
+def _get_capsolver() -> str | None:
+    if CAPSOLVER_PATH.exists():
+        k = CAPSOLVER_PATH.read_text().strip()
+        return k or None
+    return None
+
+
+def _set_capsolver(key: str) -> None:
+    CAPSOLVER_PATH.write_text(key.strip() + "\n")
+    os.chmod(CAPSOLVER_PATH, 0o600)
+
+
+def menu_setup_capsolver():
+    _clear_screen(); _header()
+    current = _get_capsolver()
+    masked = (current[:8] + "..." if current else "-")
+    console.print(f"\nCurrent Capsolver key: [cyan]{masked}[/cyan]\n")
+    val = Prompt.ask("Enter Capsolver API key (empty to clear, 'q' to cancel)",
+                     password=True)
+    if val.lower() == "q":
+        return
+    if not val.strip():
+        if CAPSOLVER_PATH.exists():
+            CAPSOLVER_PATH.unlink()
+        console.print("[yellow]Capsolver key cleared.[/yellow]")
+    else:
+        _set_capsolver(val)
+        console.print("[green]Capsolver key saved.[/green]")
+    Prompt.ask("\nPress Enter to continue", default="")
+
+
 def menu_setup_proxy():
     _clear_screen(); _header()
     current = _get_proxy()
@@ -161,6 +193,13 @@ def menu_run_farm():
     if not tempik:
         console.print("\n[red]✗ Tempik URL is not set.[/red]")
         console.print("Set it first via [cyan]Setup tempik[/cyan] menu.")
+        Prompt.ask("\nPress Enter to continue", default="")
+        return
+
+    capsolver = _get_capsolver()
+    if not capsolver:
+        console.print("\n[red]✗ Capsolver key is not set.[/red]")
+        console.print("Set it first via [cyan]Setup capsolver key[/cyan] menu.")
         Prompt.ask("\nPress Enter to continue", default="")
         return
 
@@ -238,16 +277,19 @@ def main():
         state = _load_state()
         proxy = _get_proxy()
         tempik = _get_tempik_url()
+        capsolver = _get_capsolver()
         console.print(f"\n[dim]proxy:[/dim] {'[green]set[/green]' if proxy else '[red]not set[/red]'}"
                       f"  [dim]tempik:[/dim] {'[green]set[/green]' if tempik else '[red]not set[/red]'}"
+                      f"  [dim]capsolver:[/dim] {'[green]set[/green]' if capsolver else '[red]not set[/red]'}"
                       f"  [dim]delay:[/dim] [cyan]{state['delay']}s[/cyan]\n")
         console.print("[1] Run farm")
         console.print("[2] Results")
         console.print("[3] Setup proxy")
         console.print("[4] Setup tempik")
-        console.print("[5] Delay setting")
+        console.print("[5] Setup capsolver key")
+        console.print("[6] Delay setting")
         console.print("[0] Exit\n")
-        choice = Prompt.ask("Select", choices=["0", "1", "2", "3", "4", "5"],
+        choice = Prompt.ask("Select", choices=["0", "1", "2", "3", "4", "5", "6"],
                             default="1")
         if choice == "1":
             menu_run_farm()
@@ -258,6 +300,8 @@ def main():
         elif choice == "4":
             menu_setup_tempik()
         elif choice == "5":
+            menu_setup_capsolver()
+        elif choice == "6":
             menu_delay_setting()
         else:
             console.print("\nBye.")
