@@ -62,7 +62,15 @@ def _set_tempik_url(url: str) -> None:
     cfg.setdefault("tokenharbor", {})["base_url"] = "https://tokenharbor.ai"
     cfg.setdefault("tokenharbor", {})["turnstile_sitekey"] = "0x4AAAAAADBuC8Knz1EJZx9-"
     cfg.setdefault("tempik", {})["base_url"] = url
-    cfg.setdefault("files", {})["account_output"] = "account.json"
+    files = cfg.setdefault("files", {})
+    files.setdefault("capsolver_key", "tools/.capsolver_key")
+    files.setdefault("proxy_list", "tools/proxies.txt")
+    files.setdefault("account_output", "account.json")
+    cfg.setdefault("models", {})["free"] = [
+        "deepseek-v4-flash:free",
+        "mimo-v2.5:free",
+        "qwen3.8-27b:free",
+    ]
     # Write back as TOML manually (no writer dep).
     lines = []
     for section, vals in cfg.items():
