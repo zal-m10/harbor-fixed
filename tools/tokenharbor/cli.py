@@ -632,12 +632,27 @@ def _run_browser_farm(count: int, headed: bool = False,
     ok_count = 0
     for i in range(count):
         console.print(f"\n[bold cyan]═══ Account {i+1}/{count} ═══[/bold cyan]")
-        client = TokenHarborClient(capsolver_key=capsolver_key, proxy=proxy)
-        try:
-            result = auto_farm_one(client, headless=not headed, proxy=proxy)
-        except Exception as e:
-            console.print(f"[red]✗ Failed:[/red] {e}")
-            continue
+        result = None
+        # Retry once on rate-limit with a longer cooldown.
+        for attempt in (1, 2):
+            client = TokenHarborClient(capsolver_key=capsolver_key, proxy=proxy)
+            try:
+                result = auto_farm_one(client, headless=not headed, proxy=proxy)
+            except Exception as e:
+                console.print(f"[red]✗ Failed:[/red] {e}")
+                result = {"ok": False, "stage": "exception", "error": str(e)}
+            if result.get("ok"):
+                break
+            err = (result.get("error") or "").lower()
+            rate_limited = any(s in err for s in
+                               ("take a breath", "too fast", "try again",
+                                "rate limit", "slow down"))
+            if rate_limited and attempt == 1:
+                wait = 120
+                console.print(f"  [yellow]Rate limited — cooling down {wait}s then retrying...[/yellow]")
+                _time.sleep(wait)
+                continue
+            break
         if result.get("ok"):
             ok_count += 1
             console.print(f"[green]✓ {result['email']}[/green]")
