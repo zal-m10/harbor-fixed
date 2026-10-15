@@ -296,12 +296,12 @@ def menu_results():
             console.print(f"  • {a.get('email', '?')}: "
                           f"{a.get('stage', '?')} — {a.get('error', '?')}")
 
-    # Sub-menu: copy keys / delete results.
+    # Sub-menu: copy keys / delete results (horizontal).
     if ok:
-        console.print("\n[dim]--- actions ---[/dim]")
-        console.print("[c] Copy all API keys (keys only)")
-        console.print("[d] Delete all results")
-        console.print("[Enter] Back to menu")
+        console.print()
+        console.print("[cyan][c][/cyan] Copy all API keys  "
+                      "[cyan][d][/cyan] Delete all results  "
+                      "[cyan][Enter][/cyan] Back to menu")
         action = Prompt.ask("Action", choices=["c", "d", ""],
                             default="", show_choices=False)
         if action == "c":
