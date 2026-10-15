@@ -272,15 +272,42 @@ def menu_run_farm():
     if not Confirm.ask(f"Start farming {count} account(s)?", default=True):
         return
 
+    # Foreground or background?
+    console.print()
+    console.print("[1] Run in foreground (watch live)")
+    console.print("[2] Run in background (survives disconnect)")
+    bg_choice = Prompt.ask("Mode", choices=["1", "2"], default="1",
+                           show_choices=False)
+
     console.print()
     venv_python = REPO_DIR / ".venv" / "bin" / "python"
     py = str(venv_python) if venv_python.exists() else sys.executable
     cmd = [py, "-m", "tools.tokenharbor.cli", "browser-farm",
            "--count", str(count), "--delay", str(delay)]
-    try:
-        subprocess.run(cmd, cwd=str(REPO_DIR))
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Interrupted.[/yellow]")
+
+    if bg_choice == "2":
+        import datetime as _dt
+        ts = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+        logfile = f"/tmp/farm-{ts}.log"
+        pidfile = Path("/tmp/farm.pid")
+        # nohup + detach so it survives SSH disconnect.
+        with open(logfile, "w") as lf:
+            proc = subprocess.Popen(
+                ["nohup"] + cmd,
+                cwd=str(REPO_DIR),
+                stdout=lf, stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+        pidfile.write_text(str(proc.pid))
+        console.print(f"[green]✓ Farm started in background (PID {proc.pid}).[/green]")
+        console.print(f"[dim]Log: {logfile}[/dim]")
+        console.print("[dim]You can disconnect — it keeps running.[/dim]")
+        console.print("[dim]Check progress via menu [2] Results → [b] Background log.[/dim]")
+    else:
+        try:
+            subprocess.run(cmd, cwd=str(REPO_DIR))
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Interrupted.[/yellow]")
     Prompt.ask("\nPress Enter to continue", default="")
 
 
@@ -320,18 +347,34 @@ def menu_results():
             console.print(f"  • {a.get('email', '?')}: "
                           f"{a.get('stage', '?')} — {a.get('error', '?')}")
 
-    # Sub-menu: copy keys / delete results (horizontal).
+    # Sub-menu: copy keys / delete results / background log (horizontal).
+    console.print()
+    actions = ""
     if ok:
-        console.print()
-        console.print("[cyan][c][/cyan] Copy all API keys  "
-                      "[cyan][d][/cyan] Delete all results  "
-                      "[cyan][Enter][/cyan] Back to menu")
-        action = Prompt.ask("Action", choices=["c", "d", ""],
-                            default="", show_choices=False)
-        if action == "c":
-            _copy_keys(ok)
-        elif action == "d":
-            _delete_results()
+        actions += "[cyan][c][/cyan] Copy all API keys  [cyan][d][/cyan] Delete all results  "
+    pidfile = Path("/tmp/farm.pid")
+    bg_running = False
+    if pidfile.exists():
+        try:
+            pid = int(pidfile.read_text().strip())
+            os.kill(pid, 0)
+            bg_running = True
+        except (ValueError, OSError):
+            pass
+    has_logs = bool(list(Path("/tmp").glob("farm-*.log")))
+    if bg_running or has_logs:
+        actions += "[cyan][b][/cyan] Background log  "
+    actions += "[cyan][Enter][/cyan] Back to menu"
+    console.print(actions)
+    choices = ["c", "d", "b", ""] if ok else (["b", ""] if (bg_running or has_logs) else [""])
+    action = Prompt.ask("Action", choices=choices,
+                        default="", show_choices=False)
+    if action == "c" and ok:
+        _copy_keys(ok)
+    elif action == "d" and ok:
+        _delete_results()
+    elif action == "b":
+        _show_bg_log()
     else:
         Prompt.ask("\nPress Enter to continue", default="")
 
@@ -360,6 +403,37 @@ def _copy_keys(accounts: list) -> None:
     console.print("\n[bold]Keys:[/bold]")
     for k in keys:
         console.print(f"  {k}")
+    Prompt.ask("\nPress Enter to continue", default="")
+
+
+def _show_bg_log() -> None:
+    logs = sorted(Path("/tmp").glob("farm-*.log"), key=lambda p: p.stat().st_mtime)
+    if not logs:
+        console.print("\n[dim]No background farm logs found.[/dim]")
+        Prompt.ask("\nPress Enter to continue", default="")
+        return
+    latest = logs[-1]
+    # Check if still running.
+    pidfile = Path("/tmp/farm.pid")
+    running = False
+    if pidfile.exists():
+        try:
+            os.kill(int(pidfile.read_text().strip()), 0)
+            running = True
+        except (ValueError, OSError):
+            pass
+    status = "[green]RUNNING[/green]" if running else "[dim]finished[/dim]"
+    console.print(f"\n[bold]Background farm:[/bold] {status}")
+    console.print(f"[dim]Log: {latest}[/dim]\n")
+    try:
+        lines = latest.read_text().splitlines()
+    except OSError:
+        lines = []
+    # Show last 30 lines.
+    for line in lines[-30:]:
+        console.print(f"  {line}")
+    if running:
+        console.print("\n[dim]Still running — check again later for updates.[/dim]")
     Prompt.ask("\nPress Enter to continue", default="")
 
 
