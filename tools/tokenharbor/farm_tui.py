@@ -364,12 +364,6 @@ def main():
         proxy_status = f"[green]{len(proxies)} set[/green]" if proxies else "[red]not set[/red]"
         tempik_status = "[green]set[/green]" if tempik else "[red]not set[/red]"
         capsolver_status = "[green]set[/green]" if capsolver else "[red]not set[/red]"
-        console.print(Panel(
-            f"[dim]proxy:[/dim] {proxy_status}  "
-            f"[dim]tempik:[/dim] {tempik_status}  "
-            f"[dim]capsolver:[/dim] {capsolver_status}  "
-            f"[dim]delay:[/dim] [cyan]{state['delay']}s[/cyan]",
-            style="dim", expand=False))
         console.print()
         console.print("[1] Run farm")
         console.print("[2] Results")
@@ -378,6 +372,13 @@ def main():
         console.print("[5] Setup capsolver key")
         console.print("[6] Delay setting")
         console.print("[0] Exit\n")
+        console.print(Panel(
+            f"[dim]proxy:[/dim] {proxy_status}  "
+            f"[dim]tempik:[/dim] {tempik_status}  "
+            f"[dim]capsolver:[/dim] {capsolver_status}  "
+            f"[dim]delay:[/dim] [cyan]{state['delay']}s[/cyan]",
+            style="dim", expand=False))
+        console.print()
         choice = Prompt.ask("Select", choices=["0", "1", "2", "3", "4", "5", "6"],
                             default="1", show_choices=False)
         if choice == "1":
