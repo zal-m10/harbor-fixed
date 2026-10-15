@@ -474,7 +474,7 @@ def menu_results():
     bar = _Text()
     if ok:
         bar.append("[c] ", style="bold cyan")
-        bar.append("Copy all API keys  ")
+        bar.append("Copy all API  ")
         bar.append("[d] ", style="bold cyan")
         bar.append("Delete all results  ")
     pidfile = Path("/tmp/farm.pid")
