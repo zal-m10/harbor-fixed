@@ -432,25 +432,72 @@ def menu_run_farm():
     Prompt.ask("\nPress Enter to continue", default="")
 
 
+def _count_running_farms() -> int:
+    """Count background farm processes currently alive."""
+    count = 0
+    # Check PID file.
+    pidfile = Path("/tmp/farm.pid")
+    if pidfile.exists():
+        try:
+            pid = int(pidfile.read_text().strip())
+            os.kill(pid, 0)
+            count += 1
+        except (ValueError, OSError):
+            pass
+    # Also scan for browser-farm processes not in pidfile.
+    try:
+        out = subprocess.run(["pgrep", "-f", "browser-farm"],
+                             capture_output=True, text=True, timeout=5)
+        pids = [p for p in out.stdout.strip().split("\n") if p.strip()]
+        # Subtract the one we already counted via pidfile.
+        if pidfile.exists():
+            try:
+                known = pidfile.read_text().strip()
+                pids = [p for p in pids if p != known]
+            except OSError:
+                pass
+        count += len(pids)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    return count
+
+
+def _count_failed_from_logs() -> int:
+    """Count 'Failed at' occurrences across farm log files."""
+    total = 0
+    for log in Path("/tmp").glob("farm-*.log"):
+        try:
+            text = log.read_text()
+            total += text.count("✗ Failed at")
+        except OSError:
+            pass
+    return total
+
+
 def menu_results():
     _clear_screen(); _header()
-    if not RESULTS_PATH.exists():
-        console.print("\n[dim]No results yet. Run farm first.[/dim]")
-        Prompt.ask("\nPress Enter to continue", default="")
-        return
-    try:
-        data = json.loads(RESULTS_PATH.read_text())
-    except json.JSONDecodeError:
-        console.print("\n[red]Results file is corrupted.[/red]")
-        Prompt.ask("\nPress Enter to continue", default="")
-        return
-    accounts = data if isinstance(data, list) else [data]
+    # Gather stats even if account.json doesn't exist yet.
+    accounts = []
+    if RESULTS_PATH.exists():
+        try:
+            data = json.loads(RESULTS_PATH.read_text())
+            accounts = data if isinstance(data, list) else [data]
+        except json.JSONDecodeError:
+            console.print("\n[red]Results file is corrupted.[/red]")
     ok = [a for a in accounts if a.get("ok")]
-    fail = [a for a in accounts if not a.get("ok")]
+    fail_file = [a for a in accounts if not a.get("ok")]
 
-    console.print(f"\n[bold]Total: {len(accounts)} | "
+    running = _count_running_farms()
+    failed_logs = _count_failed_from_logs()
+    failed_total = len(fail_file) + failed_logs
+
+    console.print(f"\n[bold]Running: [cyan]{running}[/cyan] | "
                   f"[green]Success: {len(ok)}[/green] | "
-                  f"[red]Failed: {len(fail)}[/red][/bold]\n")
+                  f"[red]Failed: {failed_total}[/red][/bold]\n")
+    if not accounts and not failed_logs and running == 0:
+        console.print("[dim]No results yet. Run farm first.[/dim]")
+        Prompt.ask("\nPress Enter to continue", default="")
+        return
     if ok:
         t = Table(title="Farmed accounts", show_lines=True)
         t.add_column("#", style="dim", width=3)
@@ -462,9 +509,9 @@ def menu_results():
                       a.get("api_key", "-"),
                       "yes" if a.get("free_models") else "no")
         console.print(t)
-    if fail:
+    if fail_file:
         console.print("\n[red]Failed:[/red]")
-        for a in fail:
+        for a in fail_file:
             console.print(f"  • {a.get('email', '?')}: "
                           f"{a.get('stage', '?')} — {a.get('error', '?')}")
 
