@@ -135,15 +135,40 @@ def browser_signup(email: str, password: str,
                 return {"ok": True, "email": email, "password": password,
                         "turnstile": bool(token)}
             except PwTimeout:
+                # Deep diagnostics: screenshot + page state.
+                import os as _os
+                shot = f"/tmp/signup-fail-{int(time.time())}.png"
+                try:
+                    page.screenshot(path=shot)
+                    log(f"screenshot saved: {shot}")
+                except Exception:
+                    pass
                 err = page.evaluate(
-                    """() => document.body.innerText.slice(0, 500)"""
-                )
+                    """() => document.body.innerText.slice(0, 800)"""
+                ) or ""
+                url = page.url
+                # Check Turnstile widget state.
+                ts = page.evaluate(
+                    """() => {
+                        const iframes = document.querySelectorAll(
+                            'iframe[src*="turnstile"], iframe[src*="cloudflare"]');
+                        const widget = document.querySelector('.cf-turnstile');
+                        return {iframes: iframes.length,
+                                widget: !!widget,
+                                token: !!(document.querySelector(
+                                    'input[name="cf-turnstile-response"]') || {}).value};
+                    }"""
+                ) or {}
+                log(f"after submit: url={url} turnstile={ts}")
                 m = re.search(r"(Something went wrong[^\n]{0,120}|"
                               r"already[^.\n]{0,80}|"
-                              r"Invalid[^\n]{0,80})", err or "")
-                log(f"FAIL: {m.group(1) if m else 'no dashboard redirect'}")
+                              r"Invalid[^\n]{0,80}|"
+                              r"try again[^\n]{0,80})", err)
+                detail = m.group(1) if m else "no dashboard redirect"
+                log(f"FAIL: {detail}")
                 return {"ok": False, "email": email, "password": password,
-                        "error": m.group(1) if m else "no dashboard redirect"}
+                        "error": detail, "screenshot": shot,
+                        "page_url": url, "turnstile_state": ts}
         finally:
             ctx.close()
             browser.close()

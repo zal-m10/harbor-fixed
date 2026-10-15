@@ -645,6 +645,10 @@ def _run_browser_farm(count: int, headed: bool = False,
             _save_account(result)
         else:
             console.print(f"[red]✗ Failed at {result.get('stage')}:[/red] {result.get('error')}")
+            if result.get("screenshot"):
+                console.print(f"  [dim]Screenshot: {result['screenshot']}[/dim]")
+            if result.get("turnstile_state"):
+                console.print(f"  [dim]Turnstile: {result['turnstile_state']}[/dim]")
         if i < count - 1 and delay > 0:
             console.print(f"  [dim]Waiting {delay}s before next account (rate-limit safety)...[/dim]")
             _time.sleep(delay)
