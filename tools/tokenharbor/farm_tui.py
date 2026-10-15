@@ -119,7 +119,7 @@ TUI_BANNER = r"""
                      ██║     ██║  ██║██║  ██║██║ ╚═╝ ██║
                      ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝
 [/bold cyan]
-[bold bright_cyan]                        TokenHarbor Farm — Interactive TUI[/bold bright_cyan]
+[bold bright_cyan]                    TokenHarbor Farm — Interactive TUI[/bold bright_cyan]
 """
 
 
