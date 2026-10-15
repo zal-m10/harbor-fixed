@@ -176,8 +176,8 @@ def menu_setup_proxy():
         _clear_screen(); _header()
         proxies = _get_proxies()
         console.print(f"\n[bold]Proxy management[/bold] — [cyan]{len(proxies)}[/cyan] configured\n")
-        console.print("[1] Add proxy (bulk paste)")
-        console.print("[2] Select to delete (multi-select)")
+        console.print("\\[1] Add proxy (bulk paste)")
+        console.print("\\[2] Select to delete (multi-select)")
         console.print("[3] Delete all proxies")
         console.print("[0] Back\n")
         choice = Prompt.ask("Select", choices=["0", "1", "2", "3"],
@@ -395,8 +395,8 @@ def menu_run_farm():
 
     # Foreground or background?
     console.print()
-    console.print("[1] Run in foreground (watch live)")
-    console.print("[2] Run in background (survives disconnect)")
+    console.print("\\[1] Run in foreground (watch live)")
+    console.print("\\[2] Run in background (survives disconnect)")
     bg_choice = Prompt.ask("Mode", choices=["1", "2"], default="1",
                            show_choices=False)
 
@@ -472,7 +472,7 @@ def menu_results():
     console.print()
     actions = ""
     if ok:
-        actions += "[cyan][c][/cyan] Copy all API keys  [cyan][d][/cyan] Delete all results  "
+        actions += "[cyan]\\[c][/cyan] Copy all API keys  [cyan]\\[d][/cyan] Delete all results  "
     pidfile = Path("/tmp/farm.pid")
     bg_running = False
     if pidfile.exists():
@@ -484,8 +484,8 @@ def menu_results():
             pass
     has_logs = bool(list(Path("/tmp").glob("farm-*.log")))
     if bg_running or has_logs:
-        actions += "[cyan][b][/cyan] Background log  "
-    actions += "[cyan][Enter][/cyan] Back to menu"
+        actions += "[cyan]\\[b][/cyan] Background log  "
+    actions += "[cyan]\\[Enter][/cyan] Back to menu"
     console.print(actions)
     choices = ["c", "d", "b", ""] if ok else (["b", ""] if (bg_running or has_logs) else [""])
     action = Prompt.ask("Action", choices=choices,
