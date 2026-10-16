@@ -798,10 +798,22 @@ def _inject_tokenharbor_to_9router() -> tuple:
         return 0, 0, f"DB open failed: {e}"
 
     try:
-        row = conn.execute('SELECT id FROM providerNodes WHERE name=?', (NODE_NAME,)).fetchone()
+        # Find existing node by baseUrl (reuse user's node regardless of prefix).
+        node_id = None
+        prefix = PREFIX
+        try:
+            row = conn.execute(
+                "SELECT id, data FROM providerNodes WHERE json_extract(data, '$.baseUrl') = ?",
+                (BASE_URL,)).fetchone()
+        except Exception:
+            row = None
         if row:
             node_id = row[0]
-        else:
+            try:
+                prefix = (json.loads(row[1]) or {}).get('prefix') or PREFIX
+            except Exception:
+                pass
+        if not node_id:
             node_id = f'openai-compatible-chat-{uuid.uuid4()}'
             data = json.dumps({'prefix': PREFIX, 'apiType': 'chat', 'baseUrl': BASE_URL, 'nodeName': NODE_NAME})
             conn.execute('INSERT INTO providerNodes (id,type,name,data,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
@@ -831,7 +843,7 @@ def _inject_tokenharbor_to_9router() -> tuple:
             n = conn.execute('SELECT COUNT(*) FROM providerConnections WHERE provider=?', (node_id,)).fetchone()[0] + 1
             data = json.dumps({
                 'apiKey': key, 'authType': 'apikey', 'testStatus': 'active', 'backoffLevel': 0,
-                'providerSpecificData': {'prefix': PREFIX, 'apiType': 'chat', 'baseUrl': BASE_URL,
+                'providerSpecificData': {'prefix': prefix, 'apiType': 'chat', 'baseUrl': BASE_URL,
                                           'nodeName': NODE_NAME, 'label': email},
             })
             conn.execute('INSERT INTO providerConnections (id,provider,authType,name,email,priority,isActive,data,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
@@ -868,10 +880,22 @@ def _inject_mistral_to_9router() -> tuple:
         return 0, 0, f"DB open failed: {e}"
 
     try:
-        row = conn.execute('SELECT id FROM providerNodes WHERE name=?', (NODE_NAME,)).fetchone()
+        # Find existing node by baseUrl (reuse user's node regardless of prefix).
+        node_id = None
+        prefix = PREFIX
+        try:
+            row = conn.execute(
+                "SELECT id, data FROM providerNodes WHERE json_extract(data, '$.baseUrl') = ?",
+                (BASE_URL,)).fetchone()
+        except Exception:
+            row = None
         if row:
             node_id = row[0]
-        else:
+            try:
+                prefix = (json.loads(row[1]) or {}).get('prefix') or PREFIX
+            except Exception:
+                pass
+        if not node_id:
             node_id = f'openai-compatible-chat-{uuid.uuid4()}'
             data = json.dumps({'prefix': PREFIX, 'apiType': 'chat', 'baseUrl': BASE_URL, 'nodeName': NODE_NAME})
             conn.execute('INSERT INTO providerNodes (id,type,name,data,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
@@ -903,7 +927,7 @@ def _inject_mistral_to_9router() -> tuple:
             data = json.dumps({
                 'apiKey': key, 'authType': 'apikey', 'testStatus': 'active', 'backoffLevel': 0,
                 'defaultModel': DEFAULT_MODEL,
-                'providerSpecificData': {'prefix': PREFIX, 'apiType': 'chat', 'baseUrl': BASE_URL,
+                'providerSpecificData': {'prefix': prefix, 'apiType': 'chat', 'baseUrl': BASE_URL,
                                           'nodeName': NODE_NAME, 'label': email},
             })
             conn.execute('INSERT INTO providerConnections (id,provider,authType,name,email,priority,isActive,data,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
