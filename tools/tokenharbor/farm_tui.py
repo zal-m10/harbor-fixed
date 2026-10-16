@@ -137,7 +137,8 @@ HARBOR_BANNER = r"""
                ██║  ██║██║  ██║██║  ██║██████╔╝╚██████╔╝██║  ██║
                ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝  ╚═════╝ ╚═╝  ╚═╝
 [/bold cyan]
-[bold bright_cyan]                    TokenHarbor Farm[/bold bright_cyan]
+[bold bright_cyan]                 TokenHarbor Auto CLI — HTTP Mode • No Browser[/bold bright_cyan]
+[dim italic]                                 FORKED FROM MASANTOID[/dim italic]
 """
 
 
@@ -175,7 +176,7 @@ def _set_capsolver(key: str) -> None:
 
 
 def menu_setup_capsolver():
-    _clear_screen(); _header()
+    _clear_screen(); _harbor_header()
     current = _get_capsolver()
     masked = (current[:8] + "..." if current else "-")
     console.print(f"\nCurrent Capsolver key: [cyan]{masked}[/cyan]\n")
@@ -353,7 +354,7 @@ def _curses_multiselect(title: str, items: list) -> list | None:
 
 
 def menu_setup_tempik():
-    _clear_screen(); _header()
+    _clear_screen(); _harbor_header()
     current = _get_tempik_url()
     console.print(f"\nCurrent Tempik URL: [cyan]{current or '-'}[/cyan]\n")
     val = Prompt.ask("Enter Tempik base URL ('q' to cancel)")
@@ -378,7 +379,7 @@ def menu_delay_setting():
 
 
 def menu_run_farm():
-    _clear_screen(); _header()
+    _clear_screen(); _harbor_header()
     # Pre-flight checks.
     tempik = _get_tempik_url()
     if not tempik:
@@ -497,7 +498,7 @@ def _count_failed_from_logs() -> int:
 
 
 def menu_results():
-    _clear_screen(); _header()
+    _clear_screen(); _harbor_header()
     # Gather stats even if account.json doesn't exist yet.
     accounts = []
     if RESULTS_PATH.exists():
