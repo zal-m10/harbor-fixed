@@ -2038,8 +2038,9 @@ _INJECT_STATE_KEYS = {
 
 
 def _notify_farm_done(provider: str, total: int, success: int, failed: int,
-                      keys: list = None):
-    """Send farm completion notification to Telegram if configured."""
+                      keys: list = None, progress: str = None):
+    """Send farm completion notification to Telegram if configured.
+    If progress is set (e.g. "150/1000"), title shows progress instead."""
     import html as _html
     state = _load_state()
     if not state.get("telegram_bot_token") or not state.get("telegram_chat_id"):
@@ -2047,7 +2048,7 @@ def _notify_farm_done(provider: str, total: int, success: int, failed: int,
     inject_on = state.get(_INJECT_STATE_KEYS.get(provider, ""), False)
     inject_txt = "ON✓" if inject_on else "OFF<b>✗</b>"
 
-    title = f"✓Farm Selesai — {provider}"
+    title = f"✓Farm Selesai — {provider}" if not progress else f"Farm Progress — {provider} ({progress})"
     text = (
         f"{title}\n"
         f"\n"
@@ -2061,6 +2062,10 @@ def _notify_farm_done(provider: str, total: int, success: int, failed: int,
     text += f"\nAuto inject 9Router: <b>{inject_txt}</b>"
     ok, msg = _send_telegram(text)
     return ok
+
+
+# Chunk size for progress notifications on large batches.
+NOTIFY_CHUNK = 30
 
 
 def menu_setup_telegram():
