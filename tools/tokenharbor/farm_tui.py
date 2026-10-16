@@ -117,6 +117,19 @@ def _clear_screen():
 
 TUI_BANNER = r"""
 [bold cyan]
+                     ███████╗ █████╗ ██████╗ ███╗   ███╗
+                     ██╔════╝██╔══██╗██╔══██╗████╗ ████║
+                     █████╗  ███████║██████╔╝██╔████╔██║
+                     ██╔══╝  ██╔══██║██╔══██╗██║╚██╔╝██║
+                     ██║     ██║  ██║██║  ██║██║ ╚═╝ ██║
+                     ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝
+[/bold cyan]
+[bold bright_cyan]                    TokenHarbor Farm — Interactive TUI[/bold bright_cyan]
+"""
+
+
+HARBOR_BANNER = r"""
+[bold cyan]
                ██╗  ██╗ █████╗ ██████╗ ██████╗  ██████╗ ██████╗
                ██║  ██║██╔══██╗██╔══██╗██╔══██╗██╔═══██╗██╔══██╗
                ███████║███████║██████╔╝██████╔╝██║   ██║██████╔╝
@@ -124,12 +137,16 @@ TUI_BANNER = r"""
                ██║  ██║██║  ██║██║  ██║██████╔╝╚██████╔╝██║  ██║
                ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝  ╚═════╝ ╚═╝  ╚═╝
 [/bold cyan]
-[bold bright_cyan]                    TokenHarbor Farm — Interactive TUI[/bold bright_cyan]
+[bold bright_cyan]                    TokenHarbor Farm[/bold bright_cyan]
 """
 
 
 def _header():
     console.print(TUI_BANNER)
+
+
+def _harbor_header():
+    console.print(HARBOR_BANNER)
 
 
 def _status_line(state: dict, proxies: list, tempik, capsolver) -> None:
@@ -648,8 +665,8 @@ def menu_tokenharbor():
     """TokenHarbor submenu (was the old main menu)."""
     while True:
         _clear_screen()
-        _header()
-        console.print("\n[bold bright_cyan]  TokenHarbor Farm[/bold bright_cyan]\n")
+        _harbor_header()
+        console.print()
         state = _load_state()
         proxies = _get_proxies()
         tempik = _get_tempik_url()
