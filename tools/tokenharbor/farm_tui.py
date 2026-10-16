@@ -464,11 +464,33 @@ def menu_run_farm():
         console.print(f"[dim]Log: {logfile}[/dim]")
         console.print("[dim]You can disconnect — it keeps running.[/dim]")
         console.print("[dim]Check progress via menu [2] Results → [b] Background log.[/dim]")
+        # Arm inject monitor if auto-inject is ON.
+        state = _load_state()
+        if state.get("tokenharbor_auto_inject", False):
+            monitor = Path("/root/tokenharbor_inject_monitor.py")
+            if monitor.exists():
+                mlog = f"/tmp/tokenharbor-inject-{ts}.log"
+                with open(mlog, "w") as mlf:
+                    subprocess.Popen(
+                        ["nohup", sys.executable, str(monitor), str(proc.pid)],
+                        stdout=mlf, stderr=subprocess.STDOUT,
+                        start_new_session=True,
+                    )
+                console.print(f"[dim]Auto-inject monitor armed (log: {mlog})[/dim]")
     else:
         try:
             subprocess.run(cmd, cwd=str(REPO_DIR))
         except KeyboardInterrupt:
             console.print("\n[yellow]Interrupted.[/yellow]")
+        # Auto-inject to 9Router if enabled.
+        state = _load_state()
+        if state.get("tokenharbor_auto_inject", False):
+            console.print("\n[dim]Auto-injecting to 9Router...[/dim]")
+            added, skipped, err = _inject_tokenharbor_to_9router()
+            if err:
+                console.print(f"[red]Inject failed: {err}[/red]")
+            else:
+                console.print(f"[green]✓ Injected: {added} new, {skipped} already there.[/green]")
     Prompt.ask("\nPress Enter to continue", default="")
 
 
@@ -691,6 +713,9 @@ def menu_tokenharbor():
         capsolver = _get_capsolver()
 
         _status_line(state, proxies, tempik, capsolver)
+        th_inject_on = state.get("tokenharbor_auto_inject", False)
+        console.print(f"  [dim]auto-inject:[/dim] {'[green]ON[/green]' if th_inject_on else '[dim]OFF[/dim]'}",
+                      justify="center")
         console.print()
 
         menu = Table(show_header=False, box=None, padding=(0, 2))
@@ -701,10 +726,11 @@ def menu_tokenharbor():
         menu.add_row("[2]", "Results", "view farmed accounts")
         menu.add_row("[3]", "Setup tempik", "disposable email URL")
         menu.add_row("[4]", "Setup capsolver key", "captcha solver API key")
+        menu.add_row("[5]", "Auto inject 9Router", f"currently {('ON' if th_inject_on else 'OFF')}")
         menu.add_row("[0]", "Back", "")
         console.print(menu, justify="center")
         console.print()
-        choice = Prompt.ask("    [dim]Select Action[/dim]", choices=["0", "1", "2", "3", "4"],
+        choice = Prompt.ask("    [dim]Select Action[/dim]", choices=["0", "1", "2", "3", "4", "5"],
                             default="1", show_choices=False, show_default=False)
         if choice == "1":
             menu_run_farm()
@@ -714,6 +740,8 @@ def menu_tokenharbor():
             menu_setup_tempik()
         elif choice == "4":
             menu_setup_capsolver()
+        elif choice == "5":
+            menu_tokenharbor_inject_toggle()
         else:
             return
 
@@ -740,6 +768,85 @@ def _get_mistral_keys() -> list:
             "ok": parts[3] == "KEYED",
         })
     return out
+
+
+def _inject_tokenharbor_to_9router() -> tuple:
+    """Inject TokenHarbor keys into 9Router SQLite. Returns (added, skipped, error)."""
+    import sqlite3, uuid
+    from datetime import datetime, timezone
+    DB = '/var/lib/9router/db/data.sqlite'
+    PREFIX = 'HrbrFarm'
+    BASE_URL = 'https://tokenharbor.ai/v1'
+    NODE_NAME = 'hrbrfarm'
+
+    def now():
+        return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000Z')
+
+    def get_accounts():
+        if not RESULTS_PATH.exists():
+            return []
+        try:
+            data = json.loads(RESULTS_PATH.read_text())
+            accounts = data if isinstance(data, list) else [data]
+            return [a for a in accounts if a.get("ok") and a.get("api_key")]
+        except (json.JSONDecodeError, OSError):
+            return []
+
+    try:
+        conn = sqlite3.connect(DB)
+    except Exception as e:
+        return 0, 0, f"DB open failed: {e}"
+
+    try:
+        row = conn.execute('SELECT id FROM providerNodes WHERE name=?', (NODE_NAME,)).fetchone()
+        if row:
+            node_id = row[0]
+        else:
+            node_id = f'openai-compatible-chat-{uuid.uuid4()}'
+            data = json.dumps({'prefix': PREFIX, 'apiType': 'chat', 'baseUrl': BASE_URL, 'nodeName': NODE_NAME})
+            conn.execute('INSERT INTO providerNodes (id,type,name,data,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
+                         (node_id, 'openai-compatible', NODE_NAME, data, now(), now()))
+            conn.commit()
+
+        have = set()
+        try:
+            for (raw,) in conn.execute('SELECT data FROM providerConnections WHERE provider=?', (node_id,)):
+                try:
+                    k = (json.loads(raw) or {}).get('apiKey')
+                    if k:
+                        have.add(k)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        added = skipped = 0
+        for a in get_accounts():
+            key, email = a.get("api_key"), a.get("email", "")
+            if not key:
+                continue
+            if key in have:
+                skipped += 1
+                continue
+            n = conn.execute('SELECT COUNT(*) FROM providerConnections WHERE provider=?', (node_id,)).fetchone()[0] + 1
+            data = json.dumps({
+                'apiKey': key, 'authType': 'apikey', 'testStatus': 'active', 'backoffLevel': 0,
+                'providerSpecificData': {'prefix': PREFIX, 'apiType': 'chat', 'baseUrl': BASE_URL,
+                                          'nodeName': NODE_NAME, 'label': email},
+            })
+            conn.execute('INSERT INTO providerConnections (id,provider,authType,name,email,priority,isActive,data,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
+                         (str(uuid.uuid4()), node_id, 'apikey', f'Key {n}', None, 1, 1, data, now(), now()))
+            conn.commit()
+            have.add(key)
+            added += 1
+        conn.close()
+        return added, skipped, None
+    except Exception as e:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return 0, 0, str(e)
 
 
 def _inject_mistral_to_9router() -> tuple:
@@ -1016,6 +1123,42 @@ def _check_9router() -> tuple:
         return False, f"9Router DB check failed: {e}"
 
 
+def menu_tokenharbor_inject_toggle():
+    _clear_screen(); _harbor_header()
+    console.print()
+    state = _load_state()
+    current = state.get("tokenharbor_auto_inject", False)
+    console.print(f"\nAuto inject 9Router is currently: "
+                  f"{'[green]ON[/green]' if current else '[dim]OFF[/dim]'}")
+    console.print("[dim]ON = new keys are auto-injected to 9Router (prefix HrbrFarm).[/dim]")
+    console.print("[dim]OFF = injection disabled.[/dim]\n")
+    console.print("[1] Turn ON")
+    console.print("[2] Turn OFF")
+    console.print("[0] Back\n")
+    choice = Prompt.ask("Select", choices=["0", "1", "2"], default="0",
+                        show_choices=False)
+    if choice == "1":
+        ok, msg = _check_9router()
+        if not ok:
+            console.print(f"\n[red]✗ {msg}[/red]")
+            Prompt.ask("\nPress Enter to continue", default="")
+            return
+        console.print(f"\n[dim]✓ {msg}[/dim]")
+        state["tokenharbor_auto_inject"] = True
+        _save_state(state)
+        console.print("[green]✓ Auto inject 9Router: ON[/green]")
+        added, skipped, err = _inject_tokenharbor_to_9router()
+        if err:
+            console.print(f"[red]Inject failed: {err}[/red]")
+        else:
+            console.print(f"[dim]Injected now: {added} added, {skipped} already there.[/dim]")
+    elif choice == "2":
+        state["tokenharbor_auto_inject"] = False
+        _save_state(state)
+        console.print("\n[dim]Auto inject 9Router: OFF[/dim]")
+    Prompt.ask("\nPress Enter to continue", default="")
+
+
 def menu_mistral_inject_toggle():
     _clear_screen(); _mistral_header()
     console.print()
@@ -1131,7 +1274,19 @@ def menu_parallel_farm():
                     stdout=mlf, stderr=subprocess.STDOUT,
                     start_new_session=True,
                 )
-            console.print(f"[dim]  Auto-inject monitor armed (log: {mlog})[/dim]")
+            console.print(f"[dim]  Mistral auto-inject monitor armed[/dim]")
+    # Arm inject monitor for TokenHarbor if auto-inject is ON.
+    if state.get("tokenharbor_auto_inject", False):
+        monitor = Path("/root/tokenharbor_inject_monitor.py")
+        if monitor.exists():
+            mlog = f"/tmp/tokenharbor-inject-{ts}.log"
+            with open(mlog, "w") as mlf:
+                subprocess.Popen(
+                    ["nohup", sys.executable, str(monitor), str(th_proc.pid)],
+                    stdout=mlf, stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                )
+            console.print(f"[dim]  TokenHarbor auto-inject monitor armed[/dim]")
     console.print("\n[dim]Both keep running after disconnect.[/dim]")
     Prompt.ask("\nPress Enter to continue", default="")
 
