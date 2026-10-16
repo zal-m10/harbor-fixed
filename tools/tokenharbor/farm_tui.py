@@ -996,6 +996,25 @@ def menu_mistral():
             return
 
 
+def _check_9router() -> tuple:
+    """Check if 9Router is installed. Returns (ok: bool, msg: str)."""
+    db = Path('/var/lib/9router/db/data.sqlite')
+    if not db.exists():
+        return False, "9Router is not installed on this server."
+    # Verify the expected tables exist.
+    try:
+        import sqlite3
+        conn = sqlite3.connect(str(db))
+        tables = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")}
+        conn.close()
+        if 'providerNodes' not in tables or 'providerConnections' not in tables:
+            return False, "9Router DB found but schema is incomplete."
+        return True, "9Router detected."
+    except Exception as e:
+        return False, f"9Router DB check failed: {e}"
+
+
 def menu_mistral_inject_toggle():
     _clear_screen(); _mistral_header()
     console.print()
@@ -1011,9 +1030,17 @@ def menu_mistral_inject_toggle():
     choice = Prompt.ask("Select", choices=["0", "1", "2"], default="0",
                         show_choices=False)
     if choice == "1":
+        # Verify 9Router is installed before enabling.
+        ok, msg = _check_9router()
+        if not ok:
+            console.print(f"\n[red]✗ {msg}[/red]")
+            console.print("[dim]Auto inject tetap OFF.[/dim]")
+            Prompt.ask("\nPress Enter to continue", default="")
+            return
+        console.print(f"\n[dim]✓ {msg}[/dim]")
         state["mistral_auto_inject"] = True
         _save_state(state)
-        console.print("\n[green]✓ Auto inject 9Router: ON[/green]")
+        console.print("[green]✓ Auto inject 9Router: ON[/green]")
         # Inject any existing keys now
         added, skipped, err = _inject_mistral_to_9router()
         if err:
