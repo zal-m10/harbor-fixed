@@ -1650,8 +1650,8 @@ def _arm_inject_monitor(monitor_path: str, pid: int, ts: str, label: str):
 
 def menu_parallel_farm():
     _clear_screen(); _header()
-    console.print("\n[bold bright_cyan]  Parallel Farm[/bold bright_cyan]\n")
-    console.print("[dim]Runs TokenHarbor farm AND Mistral farm simultaneously in background.[/dim]\n")
+    console.print("\n[bold]  Parallel Farm[/bold]\n")
+    console.print("[dim]Run multiple farms simultaneously in background.[/dim]\n")
 
     proxies = _get_proxies()
     if not proxies:
@@ -1660,62 +1660,135 @@ def menu_parallel_farm():
         Prompt.ask("\nPress Enter to continue", default="")
         return
 
+    # Step 1: select which farms to run.
+    farms = {
+        "1": ("TokenHarbor", True),
+        "2": ("Mistral", True),
+        "3": ("Dahl", True),
+    }
+    while True:
+        _clear_screen(); _header()
+        console.print("\n[bold]  Parallel Farm — Select APIs[/bold]\n")
+        console.print("[dim]Toggle with number, [d] done, [0] cancel[/dim]\n")
+        for num, (name, on) in farms.items():
+            mark = "[green][x][/green]" if on else "[dim][ ][/dim]"
+            console.print(f"  {mark} [{num}] {name}")
+        console.print()
+        c = Prompt.ask("Select", choices=["0", "1", "2", "3", "d"],
+                       default="d", show_choices=False)
+        if c == "0":
+            return
+        if c == "d":
+            break
+        name, on = farms[c]
+        farms[c] = (name, not on)
+
+    selected = [(n, name) for n, (name, on) in farms.items() if on]
+    if not selected:
+        console.print("\n[yellow]No farm selected.[/yellow]")
+        Prompt.ask("\nPress Enter to continue", default="")
+        return
+
+    # Validate prerequisites per selected farm.
     tempik = _get_tempik_url()
     capsolver = _get_capsolver()
-    if not tempik or not capsolver:
-        console.print("[red]✗ TokenHarbor needs Tempik URL + Capsolver key.[/red]")
-        console.print("Set them via [cyan]Farm TokenHarbor[/cyan] submenu first.")
-        Prompt.ask("\nPress Enter to continue", default="")
-        return
-    if not MISTRAL_SCRIPT.exists():
-        console.print(f"[red]✗ Mistral script not found: {MISTRAL_SCRIPT}[/red]")
-        Prompt.ask("\nPress Enter to continue", default="")
-        return
-
-    th_count = IntPrompt.ask("TokenHarbor accounts to farm?", default=5)
-    mistral_count = IntPrompt.ask("Mistral keys to farm?", default=5)
     state = _load_state()
     delay = state.get("delay", DEFAULT_DELAY)
+    problems = []
+    if any(name == "TokenHarbor" for _, name in selected):
+        if not tempik or not capsolver:
+            problems.append("TokenHarbor needs Tempik URL + Capsolver key.")
+        venv_python = REPO_DIR / ".venv" / "bin" / "python"
+    if any(name == "Mistral" for _, name in selected):
+        if not MISTRAL_SCRIPT.exists():
+            problems.append(f"Mistral script not found: {MISTRAL_SCRIPT}")
+    if any(name == "Dahl" for _, name in selected):
+        if not DAHL_SCRIPT.exists():
+            problems.append(f"Dahl script not found: {DAHL_SCRIPT}")
+    if problems:
+        for p in problems:
+            console.print(f"[red]✗ {p}[/red]")
+        Prompt.ask("\nPress Enter to continue", default="")
+        return
 
-    console.print(f"\n[dim]TokenHarbor: {th_count} accounts (delay {delay}s)[/dim]")
-    console.print(f"[dim]Mistral: {mistral_count} keys[/dim]\n")
+    # Step 2: same batch count for all, or per farm?
+    console.print()
+    console.print("[1] Same batch count for all farms")
+    console.print("[2] Different count per farm")
+    mode = Prompt.ask("Batch mode", choices=["1", "2"], default="1",
+                      show_choices=False)
+    counts = {}
+    if mode == "1":
+        same = IntPrompt.ask("\nBatch count for all farms?", default=5)
+        for _, name in selected:
+            counts[name] = same
+    else:
+        for _, name in selected:
+            counts[name] = IntPrompt.ask(f"{name} count?", default=5)
 
-    if not Confirm.ask("Start BOTH farms in background?", default=True):
+    console.print()
+    for _, name in selected:
+        console.print(f"[dim]{name}: {counts[name]}[/dim]")
+    console.print()
+    if not Confirm.ask(f"Start {len(selected)} farm(s) in background?", default=True):
         return
 
     import datetime as _dt
     ts = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    procs = {}
 
     # TokenHarbor farm
-    venv_python = REPO_DIR / ".venv" / "bin" / "python"
-    py = str(venv_python) if venv_python.exists() else sys.executable
-    th_cmd = [py, "-m", "tools.tokenharbor.cli", "browser-farm",
-              "--count", str(th_count), "--delay", str(delay)]
-    th_log = f"/tmp/farm-{ts}.log"
-    with open(th_log, "w") as lf:
-        th_proc = subprocess.Popen(["nohup"] + th_cmd, cwd=str(REPO_DIR),
-                                   stdout=lf, stderr=subprocess.STDOUT,
-                                   start_new_session=True)
+    if "TokenHarbor" in counts:
+        py = str(venv_python) if venv_python.exists() else sys.executable
+        th_cmd = [py, "-m", "tools.tokenharbor.cli", "browser-farm",
+                  "--count", str(counts["TokenHarbor"]), "--delay", str(delay)]
+        th_log = f"/tmp/farm-{ts}.log"
+        with open(th_log, "w") as lf:
+            th_proc = subprocess.Popen(["nohup"] + th_cmd, cwd=str(REPO_DIR),
+                                       stdout=lf, stderr=subprocess.STDOUT,
+                                       start_new_session=True)
+        procs["TokenHarbor"] = (th_proc, th_log)
 
     # Mistral farm
-    mistral_cmd = [sys.executable, str(MISTRAL_SCRIPT), "--count", str(mistral_count)]
-    mistral_log = f"/tmp/mistral-farm-{ts}.log"
-    with open(mistral_log, "w") as lf:
-        mistral_proc = subprocess.Popen(["nohup"] + mistral_cmd,
-                                        stdout=lf, stderr=subprocess.STDOUT,
-                                        start_new_session=True)
+    if "Mistral" in counts:
+        mistral_cmd = [sys.executable, str(MISTRAL_SCRIPT),
+                       "--count", str(counts["Mistral"])]
+        mistral_log = f"/tmp/mistral-farm-{ts}.log"
+        with open(mistral_log, "w") as lf:
+            mistral_proc = subprocess.Popen(["nohup"] + mistral_cmd,
+                                            stdout=lf, stderr=subprocess.STDOUT,
+                                            start_new_session=True)
+        procs["Mistral"] = (mistral_proc, mistral_log)
 
-    console.print(f"\n[green]✓ TokenHarbor farm started (PID {th_proc.pid})[/green]")
-    console.print(f"[dim]  Log: {th_log}[/dim]")
-    console.print(f"[green]✓ Mistral farm started (PID {mistral_proc.pid})[/green]")
-    console.print(f"[dim]  Log: {mistral_log}[/dim]")
+    # Dahl farm
+    if "Dahl" in counts:
+        dahl_cmd = [sys.executable, str(DAHL_SCRIPT),
+                    "--count", str(counts["Dahl"])]
+        dahl_log = f"/tmp/dahl-farm-{ts}.log"
+        with open(dahl_log, "w") as lf:
+            dahl_proc = subprocess.Popen(["nohup"] + dahl_cmd,
+                                         stdout=lf, stderr=subprocess.STDOUT,
+                                         start_new_session=True)
+        procs["Dahl"] = (dahl_proc, dahl_log)
+
+    console.print()
+    for name, (proc, log) in procs.items():
+        console.print(f"[green]✓ {name} farm started (PID {proc.pid})[/green]")
+        console.print(f"[dim]  Log: {log}[/dim]")
+
     # Arm monitors if auto-inject ON or Telegram configured.
     state = _load_state()
-    if _should_arm_monitor(state, "mistral_auto_inject"):
-        _arm_inject_monitor("/root/mistral_inject_monitor.py", mistral_proc.pid, ts, "mistral")
-    if _should_arm_monitor(state, "tokenharbor_auto_inject"):
-        _arm_inject_monitor("/root/tokenharbor_inject_monitor.py", th_proc.pid, ts, "tokenharbor")
-    console.print("\n[dim]Both keep running after disconnect.[/dim]")
+    _monitors = {
+        "TokenHarbor": ("tokenharbor_auto_inject", "/root/tokenharbor_inject_monitor.py", "tokenharbor"),
+        "Mistral": ("mistral_auto_inject", "/root/mistral_inject_monitor.py", "mistral"),
+        "Dahl": ("dahl_auto_inject", "/root/dahl_inject_monitor.py", "dahl"),
+    }
+    for name, (proc, _) in procs.items():
+        inject_key, mon_path, label = _monitors[name]
+        if _should_arm_monitor(state, inject_key):
+            _arm_inject_monitor(mon_path, proc.pid, ts, label)
+
+    console.print("\n[dim]All keep running after disconnect.[/dim]")
     Prompt.ask("\nPress Enter to continue", default="")
 
 
