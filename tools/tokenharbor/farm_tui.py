@@ -504,6 +504,11 @@ def menu_run_farm():
     if not Confirm.ask(f"Start farming {count} account(s)?", default=True):
         return
 
+    # Snapshot existing keys BEFORE the run (for per-run notification).
+    _before_keys_th = set(
+        a.get("api_key") for a in _get_accounts() if a.get("api_key")
+    )
+
     # Foreground or background?
     console.print()
     console.print("\\[1] Run in foreground (watch live)")
@@ -532,7 +537,8 @@ def menu_run_farm():
         # Arm monitor if auto-inject ON or Telegram configured.
         state = _load_state()
         if _should_arm_monitor(state, "tokenharbor_auto_inject"):
-            _arm_inject_monitor("/root/tokenharbor_inject_monitor.py", farm_pid, ts, "tokenharbor")
+            _arm_inject_monitor("/root/tokenharbor_inject_monitor.py", farm_pid, ts, "tokenharbor",
+                                count, sorted(_before_keys_th))
     else:
         try:
             subprocess.run(cmd, cwd=str(REPO_DIR))
@@ -547,13 +553,17 @@ def menu_run_farm():
                 console.print(f"[red]Inject failed: {err}[/red]")
             else:
                 console.print(f"[green]✓ Injected: {added} new, {skipped} already there.[/green]")
-        # Telegram notification.
+        # Telegram notification — only keys from THIS run.
         try:
             accounts = _get_accounts()
-            ok_keys = [a["api_key"] for a in accounts if a.get("ok") and a.get("api_key")]
-            total = len(accounts)
-            success = len(ok_keys)
-            _notify_farm_done("TokenHarbor", total, success, total - success, ok_keys)
+            new_keys = [
+                a["api_key"] for a in accounts
+                if a.get("ok") and a.get("api_key")
+                and a["api_key"] not in _before_keys_th
+            ]
+            success = min(len(new_keys), count)
+            _notify_farm_done("TokenHarbor", count, success, count - success,
+                              new_keys[:count])
         except Exception:
             pass
     Prompt.ask("\nPress Enter to continue", default="")
@@ -1055,6 +1065,11 @@ def menu_mistral_run_farm():
     if not Confirm.ask(f"Start farming {count} Mistral key(s)?", default=True):
         return
 
+    # Snapshot existing keys BEFORE the run (for per-run notification).
+    _before_keys_mistral = set(
+        k.get("api_key") for k in _get_mistral_keys() if k.get("api_key")
+    )
+
     console.print()
     console.print("[1] Run in foreground (watch live)")
     console.print("[2] Run in background (survives disconnect)")
@@ -1072,7 +1087,8 @@ def menu_mistral_run_farm():
         # Arm monitor if auto-inject ON or Telegram configured.
         state = _load_state()
         if _should_arm_monitor(state, "mistral_auto_inject"):
-            _arm_inject_monitor("/root/mistral_inject_monitor.py", farm_pid, ts, "mistral")
+            _arm_inject_monitor("/root/mistral_inject_monitor.py", farm_pid, ts, "mistral",
+                                count, sorted(_before_keys_mistral))
     else:
         try:
             subprocess.run(cmd)
@@ -1087,13 +1103,17 @@ def menu_mistral_run_farm():
                 console.print(f"[red]Inject failed: {err}[/red]")
             else:
                 console.print(f"[green]✓ Injected: {added} new, {skipped} already there.[/green]")
-        # Telegram notification.
+        # Telegram notification — only keys from THIS run.
         try:
             keys = _get_mistral_keys()
-            ok_keys = [k["api_key"] for k in keys if k.get("ok") and k.get("api_key")]
-            total = len(keys)
-            success = len(ok_keys)
-            _notify_farm_done("Mistral", total, success, total - success, ok_keys)
+            new_keys = [
+                k["api_key"] for k in keys
+                if k.get("ok") and k.get("api_key")
+                and k["api_key"] not in _before_keys_mistral
+            ]
+            success = min(len(new_keys), count)
+            _notify_farm_done("Mistral", count, success, count - success,
+                              new_keys[:count])
         except Exception:
             pass
     Prompt.ask("\nPress Enter to continue", default="")
@@ -1427,6 +1447,11 @@ def menu_dahl_run_farm():
     if not Confirm.ask(f"Start farming {count} Dahl key(s)?", default=True):
         return
 
+    # Snapshot existing keys BEFORE the run (for per-run notification).
+    _before_keys_dahl = set(
+        k.get("api_key") for k in _get_dahl_keys() if k.get("api_key")
+    )
+
     console.print()
     console.print("[1] Run in foreground (watch live)")
     console.print("[2] Run in background (survives disconnect)")
@@ -1444,7 +1469,8 @@ def menu_dahl_run_farm():
         # Arm monitor if auto-inject ON or Telegram configured.
         state = _load_state()
         if _should_arm_monitor(state, "dahl_auto_inject"):
-            _arm_inject_monitor("/root/dahl_inject_monitor.py", farm_pid, ts, "dahl")
+            _arm_inject_monitor("/root/dahl_inject_monitor.py", farm_pid, ts, "dahl",
+                                count, sorted(_before_keys_dahl))
     else:
         try:
             subprocess.run(cmd)
@@ -1459,13 +1485,17 @@ def menu_dahl_run_farm():
                 console.print(f"[red]Inject failed: {err}[/red]")
             else:
                 console.print(f"[green]✓ Injected: {added} new, {skipped} already there.[/green]")
-        # Telegram notification.
+        # Telegram notification — only keys from THIS run.
         try:
             keys = _get_dahl_keys()
-            ok_keys = [k["api_key"] for k in keys if k.get("ok") and k.get("api_key")]
-            total = len(keys)
-            success = len(ok_keys)
-            _notify_farm_done("Dahl", total, success, total - success, ok_keys)
+            new_keys = [
+                k["api_key"] for k in keys
+                if k.get("ok") and k.get("api_key")
+                and k["api_key"] not in _before_keys_dahl
+            ]
+            success = min(len(new_keys), count)
+            _notify_farm_done("Dahl", count, success, count - success,
+                              new_keys[:count])
         except Exception:
             pass
     Prompt.ask("\nPress Enter to continue", default="")
@@ -1662,14 +1692,18 @@ def _spawn_detached(cmd: list, logfile: str, cwd: str = None) -> int:
     return int(data.decode().strip())
 
 
-def _arm_inject_monitor(monitor_path: str, pid: int, ts: str, label: str):
+def _arm_inject_monitor(monitor_path: str, pid: int, ts: str, label: str,
+                        count: int = 0, before_keys: list = None):
     """Spawn inject+notify monitor for a background farm PID."""
+    import json as _json
     monitor = Path(monitor_path)
     if not monitor.exists():
         console.print(f"[yellow]⚠ Monitor script not found: {monitor_path}[/yellow]")
         return
     mlog = f"/tmp/{label}-inject-{ts}.log"
-    _spawn_detached([sys.executable, str(monitor), str(pid)], mlog)
+    args = [sys.executable, str(monitor), str(pid), str(count),
+            _json.dumps(before_keys or [])]
+    _spawn_detached(args, mlog)
     console.print(f"[dim]  {label} monitor armed[/dim]")
 
 
@@ -1821,6 +1855,18 @@ def menu_parallel_farm():
     if not Confirm.ask(f"Start {len(selected)} farm(s) in background?", default=True):
         return
 
+    # Snapshot existing keys BEFORE the runs (for per-run notifications).
+    _p_before = {}
+    if "TokenHarbor" in counts:
+        _p_before["TokenHarbor"] = sorted(
+            a.get("api_key") for a in _get_accounts() if a.get("api_key"))
+    if "Mistral" in counts:
+        _p_before["Mistral"] = sorted(
+            k.get("api_key") for k in _get_mistral_keys() if k.get("api_key"))
+    if "Dahl" in counts:
+        _p_before["Dahl"] = sorted(
+            k.get("api_key") for k in _get_dahl_keys() if k.get("api_key"))
+
     import datetime as _dt
     ts = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     procs = {}
@@ -1865,7 +1911,8 @@ def menu_parallel_farm():
     for name, (pid, _) in procs.items():
         inject_key, mon_path, label = _monitors[name]
         if _should_arm_monitor(state, inject_key):
-            _arm_inject_monitor(mon_path, pid, ts, label)
+            _arm_inject_monitor(mon_path, pid, ts, label,
+                                counts.get(name, 0), _p_before.get(name, []))
 
     console.print("\n[dim]All keep running after disconnect.[/dim]")
     Prompt.ask("\nPress Enter to continue", default="")
