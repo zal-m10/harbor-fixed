@@ -1,7 +1,9 @@
-"""Interactive TUI for TokenHarbor farming.
+"""Interactive TUI for TokenHarbor + Mistral farming.
 
 Launched via the `farm` command after running install.sh.
-Menu: Run farm | Results | Setup proxy | Setup tempik | Delay setting
+Main menu: Farm TokenHarbor | Farm Mistral keys | Parallel farm |
+           Delay setting | Setup Proxy
+Each farm has its own submenu with Run farm / Results.
 """
 from __future__ import annotations
 
@@ -24,6 +26,9 @@ PROXY_PATH = REPO_DIR / "tools" / "proxies.txt"
 CAPSOLVER_PATH = Path(__file__).resolve().parent / ".capsolver_key"
 RESULTS_PATH = REPO_DIR / "account.json"
 TUI_STATE = Path.home() / ".farm_tui.json"
+
+MISTRAL_SCRIPT = Path("/root/mistral_farm.py")
+MISTRAL_KEYS = Path("/root/mistral_keys.txt")
 
 DEFAULT_DELAY = 60
 
@@ -639,6 +644,289 @@ def _delete_results() -> None:
     Prompt.ask("\nPress Enter to continue", default="")
 
 
+def menu_tokenharbor():
+    """TokenHarbor submenu (was the old main menu)."""
+    while True:
+        _clear_screen()
+        _header()
+        console.print("\n[bold bright_cyan]  TokenHarbor Farm[/bold bright_cyan]\n")
+        state = _load_state()
+        proxies = _get_proxies()
+        tempik = _get_tempik_url()
+        capsolver = _get_capsolver()
+
+        _status_line(state, proxies, tempik, capsolver)
+        console.print()
+
+        menu = Table(show_header=False, box=None, padding=(0, 2))
+        menu.add_column("key", style="bold bright_cyan", width=5, justify="right")
+        menu.add_column("label", style="white")
+        menu.add_column("hint", style="dim")
+        menu.add_row("[1]", "Run farm", "start farming accounts")
+        menu.add_row("[2]", "Results", "view farmed accounts")
+        menu.add_row("[3]", "Setup tempik", "disposable email URL")
+        menu.add_row("[4]", "Setup capsolver key", "captcha solver API key")
+        menu.add_row("[0]", "Back", "")
+        console.print(menu, justify="center")
+        console.print()
+        choice = Prompt.ask("    [dim]Select Action[/dim]", choices=["0", "1", "2", "3", "4"],
+                            default="1", show_choices=False, show_default=False)
+        if choice == "1":
+            menu_run_farm()
+        elif choice == "2":
+            menu_results()
+        elif choice == "3":
+            menu_setup_tempik()
+        elif choice == "4":
+            menu_setup_capsolver()
+        else:
+            return
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Mistral farm submenu
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _get_mistral_keys() -> list:
+    """Parse /root/mistral_keys.txt -> list of dicts."""
+    if not MISTRAL_KEYS.exists():
+        return []
+    out = []
+    for line in MISTRAL_KEYS.read_text().splitlines():
+        parts = line.strip().split("|")
+        if len(parts) < 5:
+            continue
+        out.append({
+            "email": parts[0],
+            "password": parts[1],
+            "session_token": parts[2],
+            "status": parts[3],
+            "api_key": parts[4],
+            "ok": parts[3] == "KEYED",
+        })
+    return out
+
+
+def _count_mistral_running() -> int:
+    """Count running mistral_farm.py processes."""
+    try:
+        out = subprocess.run(["pgrep", "-f", "mistral_farm.py"],
+                             capture_output=True, text=True, timeout=5)
+        pids = [p for p in out.stdout.strip().split("\n") if p.strip()]
+        return len(pids)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return 0
+
+
+def menu_mistral_run_farm():
+    _clear_screen(); _header()
+    console.print("\n[bold bright_cyan]  Mistral Farm[/bold bright_cyan]\n")
+    if not MISTRAL_SCRIPT.exists():
+        console.print(f"[red]✗ Mistral farm script not found: {MISTRAL_SCRIPT}[/red]")
+        Prompt.ask("\nPress Enter to continue", default="")
+        return
+
+    proxies = _get_proxies()
+    if not proxies:
+        console.print("[yellow]⚠ No proxy configured.[/yellow]")
+        console.print("Set proxies via main menu [cyan]Setup Proxy[/cyan].")
+        Prompt.ask("\nPress Enter to continue", default="")
+        return
+
+    count = IntPrompt.ask("\nHow many keys to farm?", default=1)
+    console.print(f"\n[dim]Proxy: {len(proxies)} (rotating)[/dim]")
+    console.print(f"[dim]Script: {MISTRAL_SCRIPT}[/dim]\n")
+
+    if not Confirm.ask(f"Start farming {count} Mistral key(s)?", default=True):
+        return
+
+    console.print()
+    console.print("[1] Run in foreground (watch live)")
+    console.print("[2] Run in background (survives disconnect)")
+    bg_choice = Prompt.ask("Mode", choices=["1", "2"], default="1",
+                           show_choices=False)
+
+    cmd = [sys.executable, str(MISTRAL_SCRIPT), "--count", str(count)]
+    if bg_choice == "2":
+        import datetime as _dt
+        ts = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+        logfile = f"/tmp/mistral-farm-{ts}.log"
+        with open(logfile, "w") as lf:
+            proc = subprocess.Popen(
+                ["nohup"] + cmd,
+                stdout=lf, stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+        console.print(f"[green]✓ Mistral farm started in background (PID {proc.pid}).[/green]")
+        console.print(f"[dim]Log: {logfile}[/dim]")
+    else:
+        try:
+            subprocess.run(cmd)
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Interrupted.[/yellow]")
+    Prompt.ask("\nPress Enter to continue", default="")
+
+
+def menu_mistral_results():
+    _clear_screen(); _header()
+    console.print("\n[bold bright_cyan]  Mistral Farm — Results[/bold bright_cyan]\n")
+    keys = _get_mistral_keys()
+    ok = [k for k in keys if k["ok"]]
+    running = _count_mistral_running()
+
+    console.print(f"[bold]Running: [cyan]{running}[/cyan] | "
+                  f"[green]Success: {len(ok)}[/green] | "
+                  f"[dim]Total: {len(keys)}[/dim][/bold]\n")
+    if ok:
+        t = Table(title="Mistral API keys", show_lines=True)
+        t.add_column("#", style="dim", width=3)
+        t.add_column("Email", style="cyan")
+        t.add_column("API key", style="green")
+        for i, k in enumerate(ok, 1):
+            t.add_row(str(i), k["email"], k["api_key"])
+        console.print(t)
+    elif not keys and running == 0:
+        console.print("[dim]No results yet. Run farm first.[/dim]")
+
+    # Actions
+    from rich.text import Text as _Text
+    console.print()
+    bar = _Text()
+    if ok:
+        bar.append("[c] ", style="bold cyan")
+        bar.append("Copy all API  ")
+        bar.append("[d] ", style="bold cyan")
+        bar.append("Delete all results  ")
+    bar.append("[Enter] ", style="bold cyan")
+    bar.append("Back")
+    console.print(bar)
+    choices = ["c", "d", ""] if ok else [""]
+    action = Prompt.ask("Action", choices=choices, default="", show_choices=False)
+    if action == "c" and ok:
+        text = "\n".join(k["api_key"] for k in ok)
+        kf = Path("/root/mistral_keys_export.txt")
+        kf.write_text(text + "\n")
+        console.print(f"[green]✓ {len(ok)} keys saved to {kf}[/green]")
+        for k in ok:
+            console.print(f"  {k['api_key']}")
+        Prompt.ask("\nPress Enter to continue", default="")
+    elif action == "d" and ok:
+        if Confirm.ask("\n[red]Delete ALL Mistral results?[/red]", default=False):
+            MISTRAL_KEYS.unlink(missing_ok=True)
+            kf = Path("/root/mistral_keys_export.txt")
+            kf.unlink(missing_ok=True)
+            for log in Path("/tmp").glob("mistral-farm-*.log"):
+                try:
+                    log.unlink()
+                except OSError:
+                    pass
+            console.print("[green]✓ All Mistral results deleted.[/green]")
+        Prompt.ask("\nPress Enter to continue", default="")
+
+
+def menu_mistral():
+    """Mistral farm submenu."""
+    while True:
+        _clear_screen()
+        _header()
+        console.print("\n[bold bright_cyan]  Mistral Farm[/bold bright_cyan]\n")
+        proxies = _get_proxies()
+        running = _count_mistral_running()
+        keys = _get_mistral_keys()
+        ok = len([k for k in keys if k["ok"]])
+
+        console.print(f"  [dim]proxy:[/dim] {'[green]' + str(len(proxies)) + ' set[/green]' if proxies else '[red]not set[/red]'}   "
+                      f"[dim]running:[/dim] [cyan]{running}[/cyan]   "
+                      f"[dim]keys:[/dim] [green]{ok}[/green]\n")
+
+        menu = Table(show_header=False, box=None, padding=(0, 2))
+        menu.add_column("key", style="bold bright_cyan", width=5, justify="right")
+        menu.add_column("label", style="white")
+        menu.add_column("hint", style="dim")
+        menu.add_row("[1]", "Run farm", "farm Mistral API keys")
+        menu.add_row("[2]", "Results", f"{ok} keys farmed")
+        menu.add_row("[0]", "Back", "")
+        console.print(menu, justify="center")
+        console.print()
+        choice = Prompt.ask("    [dim]Select Action[/dim]", choices=["0", "1", "2"],
+                            default="1", show_choices=False, show_default=False)
+        if choice == "1":
+            menu_mistral_run_farm()
+        elif choice == "2":
+            menu_mistral_results()
+        else:
+            return
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Parallel farm
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def menu_parallel_farm():
+    _clear_screen(); _header()
+    console.print("\n[bold bright_cyan]  Parallel Farm[/bold bright_cyan]\n")
+    console.print("[dim]Runs TokenHarbor farm AND Mistral farm simultaneously in background.[/dim]\n")
+
+    proxies = _get_proxies()
+    if not proxies:
+        console.print("[yellow]⚠ No proxy configured.[/yellow]")
+        console.print("Set proxies via main menu [cyan]Setup Proxy[/cyan].")
+        Prompt.ask("\nPress Enter to continue", default="")
+        return
+
+    tempik = _get_tempik_url()
+    capsolver = _get_capsolver()
+    if not tempik or not capsolver:
+        console.print("[red]✗ TokenHarbor needs Tempik URL + Capsolver key.[/red]")
+        console.print("Set them via [cyan]Farm TokenHarbor[/cyan] submenu first.")
+        Prompt.ask("\nPress Enter to continue", default="")
+        return
+    if not MISTRAL_SCRIPT.exists():
+        console.print(f"[red]✗ Mistral script not found: {MISTRAL_SCRIPT}[/red]")
+        Prompt.ask("\nPress Enter to continue", default="")
+        return
+
+    th_count = IntPrompt.ask("TokenHarbor accounts to farm?", default=5)
+    mistral_count = IntPrompt.ask("Mistral keys to farm?", default=5)
+    state = _load_state()
+    delay = state.get("delay", DEFAULT_DELAY)
+
+    console.print(f"\n[dim]TokenHarbor: {th_count} accounts (delay {delay}s)[/dim]")
+    console.print(f"[dim]Mistral: {mistral_count} keys[/dim]\n")
+
+    if not Confirm.ask("Start BOTH farms in background?", default=True):
+        return
+
+    import datetime as _dt
+    ts = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+
+    # TokenHarbor farm
+    venv_python = REPO_DIR / ".venv" / "bin" / "python"
+    py = str(venv_python) if venv_python.exists() else sys.executable
+    th_cmd = [py, "-m", "tools.tokenharbor.cli", "browser-farm",
+              "--count", str(th_count), "--delay", str(delay)]
+    th_log = f"/tmp/farm-{ts}.log"
+    with open(th_log, "w") as lf:
+        th_proc = subprocess.Popen(["nohup"] + th_cmd, cwd=str(REPO_DIR),
+                                   stdout=lf, stderr=subprocess.STDOUT,
+                                   start_new_session=True)
+
+    # Mistral farm
+    mistral_cmd = [sys.executable, str(MISTRAL_SCRIPT), "--count", str(mistral_count)]
+    mistral_log = f"/tmp/mistral-farm-{ts}.log"
+    with open(mistral_log, "w") as lf:
+        mistral_proc = subprocess.Popen(["nohup"] + mistral_cmd,
+                                        stdout=lf, stderr=subprocess.STDOUT,
+                                        start_new_session=True)
+
+    console.print(f"\n[green]✓ TokenHarbor farm started (PID {th_proc.pid})[/green]")
+    console.print(f"[dim]  Log: {th_log}[/dim]")
+    console.print(f"[green]✓ Mistral farm started (PID {mistral_proc.pid})[/green]")
+    console.print(f"[dim]  Log: {mistral_log}[/dim]")
+    console.print("\n[dim]Both keep running after disconnect.[/dim]")
+    Prompt.ask("\nPress Enter to continue", default="")
+
+
 def main():
     while True:
         _clear_screen()
@@ -655,29 +943,26 @@ def main():
         menu.add_column("key", style="bold bright_cyan", width=5, justify="right")
         menu.add_column("label", style="white")
         menu.add_column("hint", style="dim")
-        menu.add_row("[1]", "Run farm", "start farming accounts")
-        menu.add_row("[2]", "Results", "view farmed accounts")
-        menu.add_row("[3]", "Setup proxy", f"{len(proxies)} configured" if proxies else "not configured")
-        menu.add_row("[4]", "Setup tempik", "disposable email URL")
-        menu.add_row("[5]", "Setup capsolver key", "captcha solver API key")
-        menu.add_row("[6]", "Delay setting", f"currently {state['delay']}s")
+        menu.add_row("[1]", "Farm TokenHarbor", "TokenHarbor account farming")
+        menu.add_row("[2]", "Farm Mistral keys", "Mistral API key farming")
+        menu.add_row("[3]", "Parallel farm", "run both farms in background")
+        menu.add_row("[4]", "Delay setting", f"currently {state['delay']}s")
+        menu.add_row("[5]", "Setup Proxy", f"{len(proxies)} configured" if proxies else "not configured")
         menu.add_row("[0]", "Exit", "")
         console.print(menu, justify="center")
         console.print()
-        choice = Prompt.ask("    [dim]Select Action[/dim]", choices=["0", "1", "2", "3", "4", "5", "6"],
+        choice = Prompt.ask("    [dim]Select Action[/dim]", choices=["0", "1", "2", "3", "4", "5"],
                             default="1", show_choices=False, show_default=False)
         if choice == "1":
-            menu_run_farm()
+            menu_tokenharbor()
         elif choice == "2":
-            menu_results()
+            menu_mistral()
         elif choice == "3":
-            menu_setup_proxy()
+            menu_parallel_farm()
         elif choice == "4":
-            menu_setup_tempik()
-        elif choice == "5":
-            menu_setup_capsolver()
-        elif choice == "6":
             menu_delay_setting()
+        elif choice == "5":
+            menu_setup_proxy()
         else:
             console.print("\nBye.")
             break
