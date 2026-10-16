@@ -969,10 +969,11 @@ def menu_mistral():
         inject_on = state.get("mistral_auto_inject", False)
         inject_txt = "[green]ON[/green]" if inject_on else "[dim]OFF[/dim]"
 
-        console.print(f"  [dim]proxy:[/dim] {'[green]' + str(len(proxies)) + ' set[/green]' if proxies else '[red]not set[/red]'}   "
+        console.print(f"[dim]proxy:[/dim] {'[green]' + str(len(proxies)) + ' set[/green]' if proxies else '[red]not set[/red]'}   "
                       f"[dim]running:[/dim] [magenta]{running}[/magenta]   "
                       f"[dim]keys:[/dim] [green]{ok}[/green]   "
-                      f"[dim]auto-inject:[/dim] {inject_txt}\n")
+                      f"[dim]auto-inject:[/dim] {inject_txt}\n",
+                      justify="center")
 
         menu = Table(show_header=False, box=None, padding=(0, 2))
         menu.add_column("key", style="bold bright_magenta", width=5, justify="right")
