@@ -165,7 +165,7 @@ FARM_INDENT = " " * 21
 def _farm_header():
     for line in FARM_ART:
         console.print(Text(FARM_INDENT) + _gradient_text(line, FARM_GRADIENT))
-    console.print(_gradient_text(" " * 24 + "Universal Farm — Interactive TUI",
+    console.print(_gradient_text(" " * 22 + "Universal Farm — Interactive TUI",
                                  [(0.0, (255, 20, 147)), (1.0, (148, 0, 211))]))
 
 
