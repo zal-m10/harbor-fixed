@@ -2005,7 +2005,7 @@ def _notify_farm_done(provider: str, total: int, success: int, failed: int,
         f"{title}\n"
         f"\n"
         f"{len(keys or [])} API Key:\n"
-        f"Total batch: {total}.   ✓Success: {success}.   <b>✗</b>Failed: {failed}\n"
+        f"Total:{total} | ✓Success:{success} | <b>✗</b>Failed:{failed}\n"
     )
     if keys:
         # Code block -> Telegram shows COPY CODE button.
