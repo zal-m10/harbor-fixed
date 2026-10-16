@@ -866,6 +866,21 @@ def menu_mistral_run_farm():
             )
         console.print(f"[green]✓ Mistral farm started in background (PID {proc.pid}).[/green]")
         console.print(f"[dim]Log: {logfile}[/dim]")
+        # Spawn inject monitor if auto-inject is ON.
+        state = _load_state()
+        if state.get("mistral_auto_inject", False):
+            monitor = Path("/root/mistral_inject_monitor.py")
+            if monitor.exists():
+                mlog = f"/tmp/mistral-inject-{ts}.log"
+                with open(mlog, "w") as mlf:
+                    subprocess.Popen(
+                        ["nohup", sys.executable, str(monitor), str(proc.pid)],
+                        stdout=mlf, stderr=subprocess.STDOUT,
+                        start_new_session=True,
+                    )
+                console.print(f"[dim]Auto-inject monitor armed (log: {mlog})[/dim]")
+            else:
+                console.print("[yellow]⚠ Monitor script not found, auto-inject may not run.[/yellow]")
     else:
         try:
             subprocess.run(cmd)
@@ -1077,6 +1092,19 @@ def menu_parallel_farm():
     console.print(f"[dim]  Log: {th_log}[/dim]")
     console.print(f"[green]✓ Mistral farm started (PID {mistral_proc.pid})[/green]")
     console.print(f"[dim]  Log: {mistral_log}[/dim]")
+    # Arm inject monitor for Mistral if auto-inject is ON.
+    state = _load_state()
+    if state.get("mistral_auto_inject", False):
+        monitor = Path("/root/mistral_inject_monitor.py")
+        if monitor.exists():
+            mlog = f"/tmp/mistral-inject-{ts}.log"
+            with open(mlog, "w") as mlf:
+                subprocess.Popen(
+                    ["nohup", sys.executable, str(monitor), str(mistral_proc.pid)],
+                    stdout=mlf, stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                )
+            console.print(f"[dim]  Auto-inject monitor armed (log: {mlog})[/dim]")
     console.print("\n[dim]Both keep running after disconnect.[/dim]")
     Prompt.ask("\nPress Enter to continue", default="")
 
