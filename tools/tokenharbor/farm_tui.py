@@ -39,7 +39,7 @@ def _load_state() -> dict:
             return json.loads(TUI_STATE.read_text())
         except json.JSONDecodeError:
             pass
-    return {"delay": DEFAULT_DELAY}
+    return {"delay": DEFAULT_DELAY, "mistral_auto_inject": False}
 
 
 def _save_state(state: dict) -> None:
@@ -742,6 +742,78 @@ def _get_mistral_keys() -> list:
     return out
 
 
+def _inject_mistral_to_9router() -> tuple:
+    """Inject Mistral keys into 9Router SQLite. Returns (added, skipped, error)."""
+    import sqlite3, uuid
+    from datetime import datetime, timezone
+    DB = '/var/lib/9router/db/data.sqlite'
+    PREFIX = 'mstrlfarm'
+    BASE_URL = 'https://api.mistral.ai/v1'
+    NODE_NAME = 'mstrlfarm'
+    DEFAULT_MODEL = 'mistral-large-4'
+
+    def now():
+        return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000Z')
+
+    try:
+        conn = sqlite3.connect(DB)
+    except Exception as e:
+        return 0, 0, f"DB open failed: {e}"
+
+    try:
+        row = conn.execute('SELECT id FROM providerNodes WHERE name=?', (NODE_NAME,)).fetchone()
+        if row:
+            node_id = row[0]
+        else:
+            node_id = f'openai-compatible-chat-{uuid.uuid4()}'
+            data = json.dumps({'prefix': PREFIX, 'apiType': 'chat', 'baseUrl': BASE_URL, 'nodeName': NODE_NAME})
+            conn.execute('INSERT INTO providerNodes (id,type,name,data,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
+                         (node_id, 'openai-compatible', NODE_NAME, data, now(), now()))
+            conn.commit()
+
+        # Existing keys
+        have = set()
+        try:
+            for (raw,) in conn.execute('SELECT data FROM providerConnections WHERE provider=?', (node_id,)):
+                try:
+                    k = (json.loads(raw) or {}).get('apiKey')
+                    if k:
+                        have.add(k)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        added = skipped = 0
+        for k in _get_mistral_keys():
+            key, email = k["api_key"], k["email"]
+            if not key or not k["ok"]:
+                continue
+            if key in have:
+                skipped += 1
+                continue
+            n = conn.execute('SELECT COUNT(*) FROM providerConnections WHERE provider=?', (node_id,)).fetchone()[0] + 1
+            data = json.dumps({
+                'apiKey': key, 'authType': 'apikey', 'testStatus': 'active', 'backoffLevel': 0,
+                'defaultModel': DEFAULT_MODEL,
+                'providerSpecificData': {'prefix': PREFIX, 'apiType': 'chat', 'baseUrl': BASE_URL,
+                                          'nodeName': NODE_NAME, 'label': email},
+            })
+            conn.execute('INSERT INTO providerConnections (id,provider,authType,name,email,priority,isActive,data,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
+                         (str(uuid.uuid4()), node_id, 'apikey', f'Key {n}', None, 1, 1, data, now(), now()))
+            conn.commit()
+            have.add(key)
+            added += 1
+        conn.close()
+        return added, skipped, None
+    except Exception as e:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return 0, 0, str(e)
+
+
 def _count_mistral_running() -> int:
     """Count running mistral_farm.py processes."""
     try:
@@ -799,6 +871,15 @@ def menu_mistral_run_farm():
             subprocess.run(cmd)
         except KeyboardInterrupt:
             console.print("\n[yellow]Interrupted.[/yellow]")
+        # Auto-inject to 9Router if enabled.
+        state = _load_state()
+        if state.get("mistral_auto_inject", False):
+            console.print("\n[dim]Auto-injecting to 9Router...[/dim]")
+            added, skipped, err = _inject_mistral_to_9router()
+            if err:
+                console.print(f"[red]Inject failed: {err}[/red]")
+            else:
+                console.print(f"[green]✓ Injected: {added} new, {skipped} already there.[/green]")
     Prompt.ask("\nPress Enter to continue", default="")
 
 
@@ -869,10 +950,14 @@ def menu_mistral():
         running = _count_mistral_running()
         keys = _get_mistral_keys()
         ok = len([k for k in keys if k["ok"]])
+        state = _load_state()
+        inject_on = state.get("mistral_auto_inject", False)
+        inject_txt = "[green]ON[/green]" if inject_on else "[dim]OFF[/dim]"
 
         console.print(f"  [dim]proxy:[/dim] {'[green]' + str(len(proxies)) + ' set[/green]' if proxies else '[red]not set[/red]'}   "
                       f"[dim]running:[/dim] [magenta]{running}[/magenta]   "
-                      f"[dim]keys:[/dim] [green]{ok}[/green]\n")
+                      f"[dim]keys:[/dim] [green]{ok}[/green]   "
+                      f"[dim]auto-inject:[/dim] {inject_txt}\n")
 
         menu = Table(show_header=False, box=None, padding=(0, 2))
         menu.add_column("key", style="bold bright_magenta", width=5, justify="right")
@@ -880,17 +965,51 @@ def menu_mistral():
         menu.add_column("hint", style="dim")
         menu.add_row("[1]", "Run farm", "farm Mistral API keys")
         menu.add_row("[2]", "Results", f"{ok} keys farmed")
+        menu.add_row("[3]", "Auto inject 9Router", f"currently {('ON' if inject_on else 'OFF')}")
         menu.add_row("[0]", "Back", "")
         console.print(menu, justify="center")
         console.print()
-        choice = Prompt.ask("    [dim]Select Action[/dim]", choices=["0", "1", "2"],
+        choice = Prompt.ask("    [dim]Select Action[/dim]", choices=["0", "1", "2", "3"],
                             default="1", show_choices=False, show_default=False)
         if choice == "1":
             menu_mistral_run_farm()
         elif choice == "2":
             menu_mistral_results()
+        elif choice == "3":
+            menu_mistral_inject_toggle()
         else:
             return
+
+
+def menu_mistral_inject_toggle():
+    _clear_screen(); _mistral_header()
+    console.print()
+    state = _load_state()
+    current = state.get("mistral_auto_inject", False)
+    console.print(f"\nAuto inject 9Router is currently: "
+                  f"{'[green]ON[/green]' if current else '[dim]OFF[/dim]'}")
+    console.print("[dim]ON = new keys are auto-injected to 9Router after farming.[/dim]")
+    console.print("[dim]OFF = injection disabled.[/dim]\n")
+    console.print("[1] Turn ON")
+    console.print("[2] Turn OFF")
+    console.print("[0] Back\n")
+    choice = Prompt.ask("Select", choices=["0", "1", "2"], default="0",
+                        show_choices=False)
+    if choice == "1":
+        state["mistral_auto_inject"] = True
+        _save_state(state)
+        console.print("\n[green]✓ Auto inject 9Router: ON[/green]")
+        # Inject any existing keys now
+        added, skipped, err = _inject_mistral_to_9router()
+        if err:
+            console.print(f"[red]Inject failed: {err}[/red]")
+        else:
+            console.print(f"[dim]Injected now: {added} added, {skipped} already there.[/dim]")
+    elif choice == "2":
+        state["mistral_auto_inject"] = False
+        _save_state(state)
+        console.print("\n[dim]Auto inject 9Router: OFF[/dim]")
+    Prompt.ask("\nPress Enter to continue", default="")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
