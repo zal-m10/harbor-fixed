@@ -1648,9 +1648,87 @@ def _arm_inject_monitor(monitor_path: str, pid: int, ts: str, label: str):
     console.print(f"[dim]  {label} monitor armed[/dim]")
 
 
+def _get_running_farms() -> list:
+    """Return list of (name, pid, logfile) for running farm processes."""
+    running = []
+    # TokenHarbor: check pidfile + scan.
+    pidfile = Path("/tmp/farm.pid")
+    if pidfile.exists():
+        try:
+            pid = int(pidfile.read_text().strip())
+            os.kill(pid, 0)
+            logs = sorted(Path("/tmp").glob("farm-*.log"), key=lambda p: p.stat().st_mtime, reverse=True)
+            running.append(("TokenHarbor", pid, str(logs[0]) if logs else "-"))
+        except (ValueError, OSError):
+            pass
+    # Mistral + Dahl: scan /proc.
+    for proc in Path("/proc").iterdir():
+        if not proc.name.isdigit():
+            continue
+        try:
+            cmd = (proc / "cmdline").read_text().replace("\x00", " ")
+            if "dahl_farm.py" in cmd and "inject_monitor" not in cmd:
+                logs = sorted(Path("/tmp").glob("dahl-farm-*.log"), key=lambda p: p.stat().st_mtime, reverse=True)
+                running.append(("Dahl", int(proc.name), str(logs[0]) if logs else "-"))
+            elif "mistral_farm.py" in cmd and "inject_monitor" not in cmd:
+                logs = sorted(Path("/tmp").glob("mistral-farm-*.log"), key=lambda p: p.stat().st_mtime, reverse=True)
+                running.append(("Mistral", int(proc.name), str(logs[0]) if logs else "-"))
+        except OSError:
+            pass
+    return running
+
+
+def menu_parallel_status():
+    _clear_screen(); _header()
+    console.print("\n[bold]  Parallel Farm — Status[/bold]\n")
+    running = _get_running_farms()
+    if not running:
+        console.print("[dim]No farms running.[/dim]\n")
+    else:
+        t = Table(show_header=True, box=None, padding=(0, 2))
+        t.add_column("Farm", style="white")
+        t.add_column("PID", style="dim")
+        t.add_column("Log", style="dim")
+        for name, pid, log in running:
+            t.add_row(name, str(pid), log)
+        console.print(t)
+        console.print()
+        console.print("[dim]Pilih nomor untuk lihat log, [0] kembali[/dim]\n")
+        for i, (name, pid, log) in enumerate(running, 1):
+            console.print(f"[{i}] Lihat log {name}")
+        console.print("[0] Back\n")
+        c = Prompt.ask("Select", choices=[str(i) for i in range(len(running) + 1)],
+                       default="0", show_choices=False)
+        if c != "0":
+            name, pid, log = running[int(c) - 1]
+            if log != "-" and Path(log).exists():
+                console.print(f"\n[dim]--- {log} (20 baris terakhir) ---[/dim]")
+                lines = Path(log).read_text().splitlines()[-20:]
+                for line in lines:
+                    console.print(f"[dim]{line}[/dim]")
+            else:
+                console.print("[yellow]Log tidak ditemukan.[/yellow]")
+            Prompt.ask("\nPress Enter to continue", default="")
+            return
+    Prompt.ask("Press Enter to continue", default="")
+
+
 def menu_parallel_farm():
     _clear_screen(); _header()
     console.print("\n[bold]  Parallel Farm[/bold]\n")
+
+    # Submenu: start new or check status.
+    console.print("[1] Start new parallel farm")
+    console.print("[2] Check running farms")
+    console.print("[0] Back\n")
+    c = Prompt.ask("Select", choices=["0", "1", "2"], default="1",
+                   show_choices=False)
+    if c == "2":
+        menu_parallel_status()
+        return
+    if c == "0":
+        return
+
     console.print("[dim]Run multiple farms simultaneously in background.[/dim]\n")
 
     proxies = _get_proxies()
