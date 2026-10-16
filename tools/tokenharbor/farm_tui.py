@@ -29,6 +29,8 @@ TUI_STATE = Path.home() / ".farm_tui.json"
 
 MISTRAL_SCRIPT = Path("/root/mistral_farm.py")
 MISTRAL_KEYS = Path("/root/mistral_keys.txt")
+DAHL_SCRIPT = Path("/root/dahl_farm.py")
+DAHL_KEYS = Path("/root/dahl_keys.txt")
 
 DEFAULT_DELAY = 60
 
@@ -161,6 +163,23 @@ MISTRAL_BANNER = r"""
 
 def _mistral_header():
     console.print(MISTRAL_BANNER)
+
+
+DAHL_BANNER = r"""
+[bold green]
+                    ██████╗  █████╗ ██╗  ██╗██╗
+                    ██╔══██╗██╔══██╗██║  ██║██║
+                    ██║  ██║███████║███████║██║
+                    ██║  ██║██╔══██║██╔══██║██║
+                    ██████╔╝██║  ██║██║  ██║███████╗
+                    ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝
+[/bold green]
+[bold bright_green]              Dahl Farm Auto CLI — HTTP Mode • No Browser[/bold bright_green]
+"""
+
+
+def _dahl_header():
+    console.print(DAHL_BANNER)
 
 
 def _harbor_header():
@@ -445,7 +464,6 @@ def menu_run_farm():
     py = str(venv_python) if venv_python.exists() else sys.executable
     cmd = [py, "-m", "tools.tokenharbor.cli", "browser-farm",
            "--count", str(count), "--delay", str(delay)]
-    th_before_ok = sum(1 for a in _get_accounts() if a.get("ok") and a.get("api_key"))
 
     if bg_choice == "2":
         import datetime as _dt
@@ -468,7 +486,7 @@ def menu_run_farm():
         # Arm monitor if auto-inject ON or Telegram configured.
         state = _load_state()
         if _should_arm_monitor(state, "tokenharbor_auto_inject"):
-            _arm_inject_monitor("/root/tokenharbor_inject_monitor.py", proc.pid, ts, "tokenharbor", count, th_before_ok)
+            _arm_inject_monitor("/root/tokenharbor_inject_monitor.py", proc.pid, ts, "tokenharbor")
     else:
         try:
             subprocess.run(cmd, cwd=str(REPO_DIR))
@@ -487,8 +505,9 @@ def menu_run_farm():
         try:
             accounts = _get_accounts()
             ok_keys = [a["api_key"] for a in accounts if a.get("ok") and a.get("api_key")]
-            new_success = min(count, max(0, len(ok_keys) - th_before_ok))
-            _notify_farm_done("TokenHarbor", count, new_success, count - new_success, ok_keys)
+            total = len(accounts)
+            success = len(ok_keys)
+            _notify_farm_done("TokenHarbor", total, success, total - success, ok_keys)
         except Exception:
             pass
     Prompt.ask("\nPress Enter to continue", default="")
@@ -996,7 +1015,6 @@ def menu_mistral_run_farm():
     bg_choice = Prompt.ask("Mode", choices=["1", "2"], default="1",
                            show_choices=False)
 
-    m_before_ok = sum(1 for k in _get_mistral_keys() if k.get("ok") and k.get("api_key"))
     cmd = [sys.executable, str(MISTRAL_SCRIPT), "--count", str(count)]
     if bg_choice == "2":
         import datetime as _dt
@@ -1013,7 +1031,7 @@ def menu_mistral_run_farm():
         # Arm monitor if auto-inject ON or Telegram configured.
         state = _load_state()
         if _should_arm_monitor(state, "mistral_auto_inject"):
-            _arm_inject_monitor("/root/mistral_inject_monitor.py", proc.pid, ts, "mistral", count, m_before_ok)
+            _arm_inject_monitor("/root/mistral_inject_monitor.py", proc.pid, ts, "mistral")
     else:
         try:
             subprocess.run(cmd)
@@ -1032,8 +1050,9 @@ def menu_mistral_run_farm():
         try:
             keys = _get_mistral_keys()
             ok_keys = [k["api_key"] for k in keys if k.get("ok") and k.get("api_key")]
-            new_success = min(count, max(0, len(ok_keys) - m_before_ok))
-            _notify_farm_done("Mistral", count, new_success, count - new_success, ok_keys)
+            total = len(keys)
+            success = len(ok_keys)
+            _notify_farm_done("Mistral", total, success, total - success, ok_keys)
         except Exception:
             pass
     Prompt.ask("\nPress Enter to continue", default="")
@@ -1232,6 +1251,324 @@ def menu_mistral_inject_toggle():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Dahl farm
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _get_dahl_keys() -> list:
+    """Parse /root/dahl_keys.txt -> list of dicts."""
+    if not DAHL_KEYS.exists():
+        return []
+    out = []
+    for line in DAHL_KEYS.read_text().splitlines():
+        parts = line.strip().split("|")
+        if len(parts) < 4:
+            continue
+        out.append({
+            "username": parts[0],
+            "fingerprint": parts[1],
+            "status": parts[2],
+            "api_key": parts[3],
+            "ok": parts[2] == "ok",
+        })
+    return out
+
+
+def _count_dahl_running() -> int:
+    count = 0
+    try:
+        for proc in Path("/proc").iterdir():
+            if not proc.name.isdigit():
+                continue
+            try:
+                cmd = (proc / "cmdline").read_text()
+                if "dahl_farm.py" in cmd and "inject_monitor" not in cmd:
+                    count += 1
+            except OSError:
+                pass
+    except OSError:
+        pass
+    return count
+
+
+def _inject_dahl_to_9router() -> tuple:
+    """Inject Dahl keys into 9Router SQLite. Returns (added, skipped, error)."""
+    import sqlite3, uuid
+    from datetime import datetime, timezone
+    DB = '/var/lib/9router/db/data.sqlite'
+    PREFIX = 'DahlFarm'
+    BASE_URL = 'https://inference.dahl.global/v1'
+    NODE_NAME = 'dahltfarm'
+
+    def now():
+        return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000Z')
+
+    try:
+        conn = sqlite3.connect(DB)
+    except Exception as e:
+        return 0, 0, f"DB open failed: {e}"
+
+    try:
+        # Find existing node by baseUrl (reuse user's node regardless of prefix).
+        node_id = None
+        prefix = PREFIX
+        try:
+            row = conn.execute(
+                "SELECT id, data FROM providerNodes WHERE json_extract(data, '$.baseUrl') = ?",
+                (BASE_URL,)).fetchone()
+        except Exception:
+            row = None
+        if row:
+            node_id = row[0]
+            try:
+                prefix = (json.loads(row[1]) or {}).get('prefix') or PREFIX
+            except Exception:
+                pass
+        if not node_id:
+            node_id = f'openai-compatible-chat-{uuid.uuid4()}'
+            data = json.dumps({'prefix': PREFIX, 'apiType': 'chat', 'baseUrl': BASE_URL, 'nodeName': NODE_NAME})
+            conn.execute('INSERT INTO providerNodes (id,type,name,data,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
+                         (node_id, 'openai-compatible', NODE_NAME, data, now(), now()))
+            conn.commit()
+
+        have = set()
+        try:
+            for (raw,) in conn.execute('SELECT data FROM providerConnections WHERE provider=?', (node_id,)):
+                try:
+                    k = (json.loads(raw) or {}).get('apiKey')
+                    if k:
+                        have.add(k)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        added = skipped = 0
+        for k in _get_dahl_keys():
+            key, username = k["api_key"], k["username"]
+            if not key or not k["ok"]:
+                continue
+            if key in have:
+                skipped += 1
+                continue
+            n = conn.execute('SELECT COUNT(*) FROM providerConnections WHERE provider=?', (node_id,)).fetchone()[0] + 1
+            data = json.dumps({
+                'apiKey': key, 'authType': 'apikey', 'testStatus': 'active', 'backoffLevel': 0,
+                'providerSpecificData': {'prefix': prefix, 'apiType': 'chat', 'baseUrl': BASE_URL,
+                                          'nodeName': NODE_NAME, 'label': username},
+            })
+            conn.execute('INSERT INTO providerConnections (id,provider,authType,name,email,priority,isActive,data,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
+                         (str(uuid.uuid4()), node_id, 'apikey', f'Key {n}', None, 1, 1, data, now(), now()))
+            conn.commit()
+            have.add(key)
+            added += 1
+        conn.close()
+        return added, skipped, None
+    except Exception as e:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return 0, 0, str(e)
+
+
+def menu_dahl_run_farm():
+    _clear_screen(); _dahl_header()
+    console.print()
+    if not DAHL_SCRIPT.exists():
+        console.print(f"[red]✗ Dahl farm script not found: {DAHL_SCRIPT}[/red]")
+        Prompt.ask("\nPress Enter to continue", default="")
+        return
+
+    count = IntPrompt.ask("\nHow many keys to farm?", default=1)
+    console.print(f"\n[dim]Script: {DAHL_SCRIPT}[/dim]")
+    console.print("[dim]Pure HTTP — no browser, no email, no captcha.[/dim]\n")
+
+    if not Confirm.ask(f"Start farming {count} Dahl key(s)?", default=True):
+        return
+
+    console.print()
+    console.print("[1] Run in foreground (watch live)")
+    console.print("[2] Run in background (survives disconnect)")
+    bg_choice = Prompt.ask("Mode", choices=["1", "2"], default="1",
+                           show_choices=False)
+
+    cmd = [sys.executable, str(DAHL_SCRIPT), "--count", str(count)]
+    if bg_choice == "2":
+        import datetime as _dt
+        ts = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+        logfile = f"/tmp/dahl-farm-{ts}.log"
+        with open(logfile, "w") as lf:
+            proc = subprocess.Popen(
+                ["nohup"] + cmd,
+                stdout=lf, stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+        console.print(f"[green]✓ Dahl farm started in background (PID {proc.pid}).[/green]")
+        console.print(f"[dim]Log: {logfile}[/dim]")
+        # Arm monitor if auto-inject ON or Telegram configured.
+        state = _load_state()
+        if _should_arm_monitor(state, "dahl_auto_inject"):
+            _arm_inject_monitor("/root/dahl_inject_monitor.py", proc.pid, ts, "dahl")
+    else:
+        try:
+            subprocess.run(cmd)
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Interrupted.[/yellow]")
+        # Auto-inject to 9Router if enabled.
+        state = _load_state()
+        if state.get("dahl_auto_inject", False):
+            console.print("\n[dim]Auto-injecting to 9Router...[/dim]")
+            added, skipped, err = _inject_dahl_to_9router()
+            if err:
+                console.print(f"[red]Inject failed: {err}[/red]")
+            else:
+                console.print(f"[green]✓ Injected: {added} new, {skipped} already there.[/green]")
+        # Telegram notification.
+        try:
+            keys = _get_dahl_keys()
+            ok_keys = [k["api_key"] for k in keys if k.get("ok") and k.get("api_key")]
+            total = len(keys)
+            success = len(ok_keys)
+            _notify_farm_done("Dahl", total, success, total - success, ok_keys)
+        except Exception:
+            pass
+    Prompt.ask("\nPress Enter to continue", default="")
+
+
+def menu_dahl_results():
+    _clear_screen(); _dahl_header()
+    console.print()
+    keys = _get_dahl_keys()
+    ok = [k for k in keys if k["ok"]]
+    running = _count_dahl_running()
+
+    console.print(f"[bold]Running: [green]{running}[/green] | "
+                  f"[green]Success: {len(ok)}[/green] | "
+                  f"[dim]Total: {len(keys)}[/dim][/bold]\n",
+                  justify="center")
+    if ok:
+        t = Table(title="Dahl API keys", show_lines=True)
+        t.add_column("#", style="dim", width=3)
+        t.add_column("Username", style="green")
+        t.add_column("API key", style="green")
+        for i, k in enumerate(ok, 1):
+            t.add_row(str(i), k["username"], k["api_key"])
+        console.print(t)
+    elif not keys and running == 0:
+        console.print("[dim]No results yet. Run farm first.[/dim]")
+
+    from rich.text import Text as _Text
+    console.print()
+    bar = _Text()
+    if ok:
+        bar.append("[c] ", style="bold green")
+        bar.append("Copy all API  ")
+        bar.append("[d] ", style="bold green")
+        bar.append("Delete all results  ")
+    bar.append("[Enter] ", style="bold green")
+    bar.append("Back")
+    console.print(bar)
+    choices = ["c", "d", ""] if ok else [""]
+    action = Prompt.ask("Action", choices=choices, default="", show_choices=False)
+    if action == "c" and ok:
+        text = "\n".join(k["api_key"] for k in ok)
+        kf = Path("/root/dahl_keys_export.txt")
+        kf.write_text(text + "\n")
+        console.print(f"[green]✓ {len(ok)} keys saved to {kf}[/green]")
+        for k in ok:
+            console.print(f"  {k['api_key']}")
+        Prompt.ask("\nPress Enter to continue", default="")
+    elif action == "d" and ok:
+        if Confirm.ask("\n[red]Delete ALL Dahl results?[/red]", default=False):
+            DAHL_KEYS.unlink(missing_ok=True)
+            kf = Path("/root/dahl_keys_export.txt")
+            kf.unlink(missing_ok=True)
+            for log in Path("/tmp").glob("dahl-farm-*.log"):
+                try:
+                    log.unlink()
+                except OSError:
+                    pass
+            console.print("[green]✓ All Dahl results deleted.[/green]")
+        Prompt.ask("\nPress Enter to continue", default="")
+
+
+def menu_dahl_inject_toggle():
+    _clear_screen(); _dahl_header()
+    console.print()
+    state = _load_state()
+    current = state.get("dahl_auto_inject", False)
+    console.print(f"\nAuto inject 9Router is currently: "
+                  f"{'[green]ON[/green]' if current else '[dim]OFF[/dim]'}")
+    console.print("[dim]ON = new keys are auto-injected to 9Router (prefix DahlFarm).[/dim]")
+    console.print("[dim]OFF = injection disabled.[/dim]\n")
+    console.print("[1] Turn ON")
+    console.print("[2] Turn OFF")
+    console.print("[0] Back\n")
+    choice = Prompt.ask("Select", choices=["0", "1", "2"], default="0",
+                        show_choices=False)
+    if choice == "1":
+        ok, msg = _check_9router()
+        if not ok:
+            console.print(f"\n[red]✗ {msg}[/red]")
+            Prompt.ask("\nPress Enter to continue", default="")
+            return
+        console.print(f"\n[dim]✓ {msg}[/dim]")
+        state["dahl_auto_inject"] = True
+        _save_state(state)
+        console.print("[green]✓ Auto inject 9Router: ON[/green]")
+        added, skipped, err = _inject_dahl_to_9router()
+        if err:
+            console.print(f"[red]Inject failed: {err}[/red]")
+        else:
+            console.print(f"[dim]Injected now: {added} added, {skipped} already there.[/dim]")
+    elif choice == "2":
+        state["dahl_auto_inject"] = False
+        _save_state(state)
+        console.print("\n[dim]Auto inject 9Router: OFF[/dim]")
+    Prompt.ask("\nPress Enter to continue", default="")
+
+
+def menu_dahl():
+    """Dahl farm submenu."""
+    while True:
+        _clear_screen()
+        _dahl_header()
+        console.print()
+        running = _count_dahl_running()
+        keys = _get_dahl_keys()
+        ok = len([k for k in keys if k["ok"]])
+        state = _load_state()
+        inject_on = state.get("dahl_auto_inject", False)
+        inject_txt = "[green]ON[/green]" if inject_on else "[dim]OFF[/dim]"
+
+        console.print(f"[dim]running:[/dim] [green]{running}[/green]   "
+                      f"[dim]keys:[/dim] [green]{ok}[/green]   "
+                      f"[dim]auto-inject:[/dim] {inject_txt}\n",
+                      justify="center")
+
+        menu = Table(show_header=False, box=None, padding=(0, 2))
+        menu.add_column("key", style="bold bright_green", width=5, justify="right")
+        menu.add_column("label", style="white")
+        menu.add_column("hint", style="dim")
+        menu.add_row("[1]", "Run farm", "farm Dahl API keys")
+        menu.add_row("[2]", "Results", f"{ok} keys farmed")
+        menu.add_row("[3]", "Auto inject 9Router", f"currently {('ON' if inject_on else 'OFF')}")
+        menu.add_row("[0]", "Back", "")
+        console.print(menu, justify="center")
+        console.print()
+        choice = Prompt.ask("    [dim]Select Action[/dim]", choices=["0", "1", "2", "3"],
+                            default="1", show_choices=False, show_default=False)
+        if choice == "1":
+            menu_dahl_run_farm()
+        elif choice == "2":
+            menu_dahl_results()
+        elif choice == "3":
+            menu_dahl_inject_toggle()
+        else:
+            return
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Parallel farm
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1243,8 +1580,7 @@ def _should_arm_monitor(state: dict, inject_key: str) -> bool:
     return bool(state.get("telegram_bot_token") and state.get("telegram_chat_id"))
 
 
-def _arm_inject_monitor(monitor_path: str, pid: int, ts: str, label: str,
-                        count: int = 0, before_ok: int = 0):
+def _arm_inject_monitor(monitor_path: str, pid: int, ts: str, label: str):
     """Spawn inject+notify monitor for a background farm PID."""
     monitor = Path(monitor_path)
     if not monitor.exists():
@@ -1253,7 +1589,7 @@ def _arm_inject_monitor(monitor_path: str, pid: int, ts: str, label: str,
     mlog = f"/tmp/{label}-inject-{ts}.log"
     with open(mlog, "w") as mlf:
         subprocess.Popen(
-            ["nohup", sys.executable, str(monitor), str(pid), str(count), str(before_ok)],
+            ["nohup", sys.executable, str(monitor), str(pid)],
             stdout=mlf, stderr=subprocess.STDOUT,
             start_new_session=True,
         )
@@ -1298,8 +1634,6 @@ def menu_parallel_farm():
     import datetime as _dt
     ts = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
 
-    th_before_ok = sum(1 for a in _get_accounts() if a.get("ok") and a.get("api_key"))
-    m_before_ok = sum(1 for k in _get_mistral_keys() if k.get("ok") and k.get("api_key"))
     # TokenHarbor farm
     venv_python = REPO_DIR / ".venv" / "bin" / "python"
     py = str(venv_python) if venv_python.exists() else sys.executable
@@ -1326,9 +1660,9 @@ def menu_parallel_farm():
     # Arm monitors if auto-inject ON or Telegram configured.
     state = _load_state()
     if _should_arm_monitor(state, "mistral_auto_inject"):
-        _arm_inject_monitor("/root/mistral_inject_monitor.py", mistral_proc.pid, ts, "mistral", mistral_count, m_before_ok)
+        _arm_inject_monitor("/root/mistral_inject_monitor.py", mistral_proc.pid, ts, "mistral")
     if _should_arm_monitor(state, "tokenharbor_auto_inject"):
-        _arm_inject_monitor("/root/tokenharbor_inject_monitor.py", th_proc.pid, ts, "tokenharbor", th_count, th_before_ok)
+        _arm_inject_monitor("/root/tokenharbor_inject_monitor.py", th_proc.pid, ts, "tokenharbor")
     console.print("\n[dim]Both keep running after disconnect.[/dim]")
     Prompt.ask("\nPress Enter to continue", default="")
 
@@ -1453,26 +1787,29 @@ def main():
         menu.add_column("hint", style="dim")
         menu.add_row("[1]", "Farm TokenHarbor", "TokenHarbor account farming")
         menu.add_row("[2]", "Farm Mistral keys", "Mistral API key farming")
-        menu.add_row("[3]", "Parallel farm", "run both farms in background")
-        menu.add_row("[4]", "Delay setting", f"currently {state['delay']}s")
-        menu.add_row("[5]", "Setup Proxy", f"{len(proxies)} configured" if proxies else "not configured")
-        menu.add_row("[6]", "Setup Bot Tele", "Telegram notifications")
+        menu.add_row("[3]", "Farm Dahl keys", "Dahl Inference API keys")
+        menu.add_row("[4]", "Parallel farm", "run both farms in background")
+        menu.add_row("[5]", "Delay setting", f"currently {state['delay']}s")
+        menu.add_row("[6]", "Setup Proxy", f"{len(proxies)} configured" if proxies else "not configured")
+        menu.add_row("[7]", "Setup Bot Tele", "Telegram notifications")
         menu.add_row("[0]", "Exit", "")
         console.print(menu, justify="center")
         console.print()
-        choice = Prompt.ask("    [dim]Select Action[/dim]", choices=["0", "1", "2", "3", "4", "5", "6"],
+        choice = Prompt.ask("    [dim]Select Action[/dim]", choices=["0", "1", "2", "3", "4", "5", "6", "7"],
                             default="1", show_choices=False, show_default=False)
         if choice == "1":
             menu_tokenharbor()
         elif choice == "2":
             menu_mistral()
         elif choice == "3":
-            menu_parallel_farm()
+            menu_dahl()
         elif choice == "4":
-            menu_delay_setting()
+            menu_parallel_farm()
         elif choice == "5":
-            menu_setup_proxy()
+            menu_delay_setting()
         elif choice == "6":
+            menu_setup_proxy()
+        elif choice == "7":
             menu_setup_telegram()
         else:
             console.print("\nBye.")
