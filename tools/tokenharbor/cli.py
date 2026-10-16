@@ -81,7 +81,14 @@ def _load_all_proxies() -> list[str]:
     """Load all proxies from file."""
     if _PROXY_FILE.exists():
         lines = [l.strip() for l in _PROXY_FILE.read_text().strip().split("\n") if l.strip()]
-        return ["http://" + l.split("\t")[-1] for l in lines]
+        out = []
+        for l in lines:
+            p = l.split("\t")[-1]
+            # Don't double-prefix if scheme already present.
+            if not p.startswith(("http://", "https://", "socks5://", "socks://")):
+                p = "http://" + p
+            out.append(p)
+        return out
     return []
 
 
