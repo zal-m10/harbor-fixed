@@ -523,22 +523,16 @@ def menu_run_farm():
         logfile = f"/tmp/farm-{ts}.log"
         pidfile = Path("/tmp/farm.pid")
         # nohup + detach so it survives SSH disconnect.
-        with open(logfile, "w") as lf:
-            proc = subprocess.Popen(
-                ["nohup"] + cmd,
-                cwd=str(REPO_DIR),
-                stdout=lf, stderr=subprocess.STDOUT,
-                start_new_session=True,
-            )
-        pidfile.write_text(str(proc.pid))
-        console.print(f"[green]✓ Farm started in background (PID {proc.pid}).[/green]")
+        farm_pid = _spawn_detached(cmd, logfile, cwd=str(REPO_DIR))
+        pidfile.write_text(str(farm_pid))
+        console.print(f"[green]✓ Farm started in background (PID {farm_pid}).[/green]")
         console.print(f"[dim]Log: {logfile}[/dim]")
         console.print("[dim]You can disconnect — it keeps running.[/dim]")
         console.print("[dim]Check progress via menu [2] Results → [b] Background log.[/dim]")
         # Arm monitor if auto-inject ON or Telegram configured.
         state = _load_state()
         if _should_arm_monitor(state, "tokenharbor_auto_inject"):
-            _arm_inject_monitor("/root/tokenharbor_inject_monitor.py", proc.pid, ts, "tokenharbor")
+            _arm_inject_monitor("/root/tokenharbor_inject_monitor.py", farm_pid, ts, "tokenharbor")
     else:
         try:
             subprocess.run(cmd, cwd=str(REPO_DIR))
@@ -1072,18 +1066,13 @@ def menu_mistral_run_farm():
         import datetime as _dt
         ts = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
         logfile = f"/tmp/mistral-farm-{ts}.log"
-        with open(logfile, "w") as lf:
-            proc = subprocess.Popen(
-                ["nohup"] + cmd,
-                stdout=lf, stderr=subprocess.STDOUT,
-                start_new_session=True,
-            )
-        console.print(f"[green]✓ Mistral farm started in background (PID {proc.pid}).[/green]")
+        farm_pid = _spawn_detached(cmd, logfile)
+        console.print(f"[green]✓ Mistral farm started in background (PID {farm_pid}).[/green]")
         console.print(f"[dim]Log: {logfile}[/dim]")
         # Arm monitor if auto-inject ON or Telegram configured.
         state = _load_state()
         if _should_arm_monitor(state, "mistral_auto_inject"):
-            _arm_inject_monitor("/root/mistral_inject_monitor.py", proc.pid, ts, "mistral")
+            _arm_inject_monitor("/root/mistral_inject_monitor.py", farm_pid, ts, "mistral")
     else:
         try:
             subprocess.run(cmd)
@@ -1449,18 +1438,13 @@ def menu_dahl_run_farm():
         import datetime as _dt
         ts = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
         logfile = f"/tmp/dahl-farm-{ts}.log"
-        with open(logfile, "w") as lf:
-            proc = subprocess.Popen(
-                ["nohup"] + cmd,
-                stdout=lf, stderr=subprocess.STDOUT,
-                start_new_session=True,
-            )
-        console.print(f"[green]✓ Dahl farm started in background (PID {proc.pid}).[/green]")
+        farm_pid = _spawn_detached(cmd, logfile)
+        console.print(f"[green]✓ Dahl farm started in background (PID {farm_pid}).[/green]")
         console.print(f"[dim]Log: {logfile}[/dim]")
         # Arm monitor if auto-inject ON or Telegram configured.
         state = _load_state()
         if _should_arm_monitor(state, "dahl_auto_inject"):
-            _arm_inject_monitor("/root/dahl_inject_monitor.py", proc.pid, ts, "dahl")
+            _arm_inject_monitor("/root/dahl_inject_monitor.py", farm_pid, ts, "dahl")
     else:
         try:
             subprocess.run(cmd)
@@ -1632,6 +1616,52 @@ def _should_arm_monitor(state: dict, inject_key: str) -> bool:
     return bool(state.get("telegram_bot_token") and state.get("telegram_chat_id"))
 
 
+def _spawn_detached(cmd: list, logfile: str, cwd: str = None) -> int:
+    """Spawn a fully detached process via double-fork. Returns grandchild PID.
+    The process is adopted by init, so no zombie remains after it exits."""
+    r, w = os.pipe()
+    pid = os.fork()
+    if pid == 0:
+        # Intermediate child.
+        os.close(r)
+        os.setsid()
+        pid2 = os.fork()
+        if pid2 == 0:
+            # Grandchild: actual process.
+            os.close(w)
+            lf = open(logfile, "w")
+            os.dup2(lf.fileno(), 1)
+            os.dup2(lf.fileno(), 2)
+            if cwd:
+                os.chdir(cwd)
+            # Close pipe fds and exec.
+            try:
+                os.execvp(cmd[0], cmd)
+            except Exception:
+                os._exit(127)
+        else:
+            os.write(w, str(pid2).encode())
+            os.close(w)
+            os._exit(0)
+    # Parent: read grandchild PID, reap intermediate.
+    os.close(w)
+    data = b""
+    while True:
+        try:
+            chunk = os.read(r, 32)
+        except OSError:
+            break
+        if not chunk:
+            break
+        data += chunk
+    os.close(r)
+    try:
+        os.waitpid(pid, 0)
+    except ChildProcessError:
+        pass
+    return int(data.decode().strip())
+
+
 def _arm_inject_monitor(monitor_path: str, pid: int, ts: str, label: str):
     """Spawn inject+notify monitor for a background farm PID."""
     monitor = Path(monitor_path)
@@ -1639,12 +1669,7 @@ def _arm_inject_monitor(monitor_path: str, pid: int, ts: str, label: str):
         console.print(f"[yellow]⚠ Monitor script not found: {monitor_path}[/yellow]")
         return
     mlog = f"/tmp/{label}-inject-{ts}.log"
-    with open(mlog, "w") as mlf:
-        subprocess.Popen(
-            ["nohup", sys.executable, str(monitor), str(pid)],
-            stdout=mlf, stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
+    _spawn_detached([sys.executable, str(monitor), str(pid)], mlog)
     console.print(f"[dim]  {label} monitor armed[/dim]")
 
 
@@ -1806,37 +1831,28 @@ def menu_parallel_farm():
         th_cmd = [py, "-m", "tools.tokenharbor.cli", "browser-farm",
                   "--count", str(counts["TokenHarbor"]), "--delay", str(delay)]
         th_log = f"/tmp/farm-{ts}.log"
-        with open(th_log, "w") as lf:
-            th_proc = subprocess.Popen(["nohup"] + th_cmd, cwd=str(REPO_DIR),
-                                       stdout=lf, stderr=subprocess.STDOUT,
-                                       start_new_session=True)
-        procs["TokenHarbor"] = (th_proc, th_log)
+        th_pid = _spawn_detached(th_cmd, th_log, cwd=str(REPO_DIR))
+        procs["TokenHarbor"] = (th_pid, th_log)
 
     # Mistral farm
     if "Mistral" in counts:
         mistral_cmd = [sys.executable, str(MISTRAL_SCRIPT),
                        "--count", str(counts["Mistral"])]
         mistral_log = f"/tmp/mistral-farm-{ts}.log"
-        with open(mistral_log, "w") as lf:
-            mistral_proc = subprocess.Popen(["nohup"] + mistral_cmd,
-                                            stdout=lf, stderr=subprocess.STDOUT,
-                                            start_new_session=True)
-        procs["Mistral"] = (mistral_proc, mistral_log)
+        mistral_pid = _spawn_detached(mistral_cmd, mistral_log)
+        procs["Mistral"] = (mistral_pid, mistral_log)
 
     # Dahl farm
     if "Dahl" in counts:
         dahl_cmd = [sys.executable, str(DAHL_SCRIPT),
                     "--count", str(counts["Dahl"])]
         dahl_log = f"/tmp/dahl-farm-{ts}.log"
-        with open(dahl_log, "w") as lf:
-            dahl_proc = subprocess.Popen(["nohup"] + dahl_cmd,
-                                         stdout=lf, stderr=subprocess.STDOUT,
-                                         start_new_session=True)
-        procs["Dahl"] = (dahl_proc, dahl_log)
+        dahl_pid = _spawn_detached(dahl_cmd, dahl_log)
+        procs["Dahl"] = (dahl_pid, dahl_log)
 
     console.print()
-    for name, (proc, log) in procs.items():
-        console.print(f"[green]✓ {name} farm started (PID {proc.pid})[/green]")
+    for name, (pid, log) in procs.items():
+        console.print(f"[green]✓ {name} farm started (PID {pid})[/green]")
         console.print(f"[dim]  Log: {log}[/dim]")
 
     # Arm monitors if auto-inject ON or Telegram configured.
@@ -1846,10 +1862,10 @@ def menu_parallel_farm():
         "Mistral": ("mistral_auto_inject", "/root/mistral_inject_monitor.py", "mistral"),
         "Dahl": ("dahl_auto_inject", "/root/dahl_inject_monitor.py", "dahl"),
     }
-    for name, (proc, _) in procs.items():
+    for name, (pid, _) in procs.items():
         inject_key, mon_path, label = _monitors[name]
         if _should_arm_monitor(state, inject_key):
-            _arm_inject_monitor(mon_path, proc.pid, ts, label)
+            _arm_inject_monitor(mon_path, pid, ts, label)
 
     console.print("\n[dim]All keep running after disconnect.[/dim]")
     Prompt.ask("\nPress Enter to continue", default="")
