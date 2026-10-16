@@ -46,14 +46,14 @@ def browser_signup(email: str, password: str,
             print(f"    [browser] {msg}", flush=True)
 
     # Proxy: explicit arg wins, else env (VM), else None (direct).
-    # Format: [socks5://]user:pass@host:port
+    # Format: [http://|socks5://]user:pass@host:port
     pw_proxy = None
     if proxy:
         import re as _re
-        m = _re.match(r"(?:(socks5?)://)?([^:]+):([^@]+)@([^:]+):(\d+)", proxy)
+        m = _re.match(r"(?:(https?|socks5?)://)?([^:]+):([^@]+)@([^:]+):(\d+)", proxy)
         if m:
             scheme, user, pwd, host, port = m.groups()
-            server_scheme = "socks5" if scheme else "http"
+            server_scheme = "socks5" if scheme == "socks5" else "http"
             pw_proxy = {"server": f"{server_scheme}://{host}:{port}",
                         "username": user, "password": pwd}
         else:
