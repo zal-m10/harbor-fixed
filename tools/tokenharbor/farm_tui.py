@@ -445,6 +445,7 @@ def menu_run_farm():
     py = str(venv_python) if venv_python.exists() else sys.executable
     cmd = [py, "-m", "tools.tokenharbor.cli", "browser-farm",
            "--count", str(count), "--delay", str(delay)]
+    th_before_ok = sum(1 for a in _get_accounts() if a.get("ok") and a.get("api_key"))
 
     if bg_choice == "2":
         import datetime as _dt
@@ -467,7 +468,7 @@ def menu_run_farm():
         # Arm monitor if auto-inject ON or Telegram configured.
         state = _load_state()
         if _should_arm_monitor(state, "tokenharbor_auto_inject"):
-            _arm_inject_monitor("/root/tokenharbor_inject_monitor.py", proc.pid, ts, "tokenharbor")
+            _arm_inject_monitor("/root/tokenharbor_inject_monitor.py", proc.pid, ts, "tokenharbor", count, th_before_ok)
     else:
         try:
             subprocess.run(cmd, cwd=str(REPO_DIR))
@@ -486,9 +487,8 @@ def menu_run_farm():
         try:
             accounts = _get_accounts()
             ok_keys = [a["api_key"] for a in accounts if a.get("ok") and a.get("api_key")]
-            total = len(accounts)
-            success = len(ok_keys)
-            _notify_farm_done("TokenHarbor", total, success, total - success, ok_keys)
+            new_success = min(count, max(0, len(ok_keys) - th_before_ok))
+            _notify_farm_done("TokenHarbor", count, new_success, count - new_success, ok_keys)
         except Exception:
             pass
     Prompt.ask("\nPress Enter to continue", default="")
@@ -996,6 +996,7 @@ def menu_mistral_run_farm():
     bg_choice = Prompt.ask("Mode", choices=["1", "2"], default="1",
                            show_choices=False)
 
+    m_before_ok = sum(1 for k in _get_mistral_keys() if k.get("ok") and k.get("api_key"))
     cmd = [sys.executable, str(MISTRAL_SCRIPT), "--count", str(count)]
     if bg_choice == "2":
         import datetime as _dt
@@ -1012,7 +1013,7 @@ def menu_mistral_run_farm():
         # Arm monitor if auto-inject ON or Telegram configured.
         state = _load_state()
         if _should_arm_monitor(state, "mistral_auto_inject"):
-            _arm_inject_monitor("/root/mistral_inject_monitor.py", proc.pid, ts, "mistral")
+            _arm_inject_monitor("/root/mistral_inject_monitor.py", proc.pid, ts, "mistral", count, m_before_ok)
     else:
         try:
             subprocess.run(cmd)
@@ -1031,9 +1032,8 @@ def menu_mistral_run_farm():
         try:
             keys = _get_mistral_keys()
             ok_keys = [k["api_key"] for k in keys if k.get("ok") and k.get("api_key")]
-            total = len(keys)
-            success = len(ok_keys)
-            _notify_farm_done("Mistral", total, success, total - success, ok_keys)
+            new_success = min(count, max(0, len(ok_keys) - m_before_ok))
+            _notify_farm_done("Mistral", count, new_success, count - new_success, ok_keys)
         except Exception:
             pass
     Prompt.ask("\nPress Enter to continue", default="")
@@ -1243,7 +1243,8 @@ def _should_arm_monitor(state: dict, inject_key: str) -> bool:
     return bool(state.get("telegram_bot_token") and state.get("telegram_chat_id"))
 
 
-def _arm_inject_monitor(monitor_path: str, pid: int, ts: str, label: str):
+def _arm_inject_monitor(monitor_path: str, pid: int, ts: str, label: str,
+                        count: int = 0, before_ok: int = 0):
     """Spawn inject+notify monitor for a background farm PID."""
     monitor = Path(monitor_path)
     if not monitor.exists():
@@ -1252,7 +1253,7 @@ def _arm_inject_monitor(monitor_path: str, pid: int, ts: str, label: str):
     mlog = f"/tmp/{label}-inject-{ts}.log"
     with open(mlog, "w") as mlf:
         subprocess.Popen(
-            ["nohup", sys.executable, str(monitor), str(pid)],
+            ["nohup", sys.executable, str(monitor), str(pid), str(count), str(before_ok)],
             stdout=mlf, stderr=subprocess.STDOUT,
             start_new_session=True,
         )
@@ -1297,6 +1298,8 @@ def menu_parallel_farm():
     import datetime as _dt
     ts = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
 
+    th_before_ok = sum(1 for a in _get_accounts() if a.get("ok") and a.get("api_key"))
+    m_before_ok = sum(1 for k in _get_mistral_keys() if k.get("ok") and k.get("api_key"))
     # TokenHarbor farm
     venv_python = REPO_DIR / ".venv" / "bin" / "python"
     py = str(venv_python) if venv_python.exists() else sys.executable
@@ -1323,9 +1326,9 @@ def menu_parallel_farm():
     # Arm monitors if auto-inject ON or Telegram configured.
     state = _load_state()
     if _should_arm_monitor(state, "mistral_auto_inject"):
-        _arm_inject_monitor("/root/mistral_inject_monitor.py", mistral_proc.pid, ts, "mistral")
+        _arm_inject_monitor("/root/mistral_inject_monitor.py", mistral_proc.pid, ts, "mistral", mistral_count, m_before_ok)
     if _should_arm_monitor(state, "tokenharbor_auto_inject"):
-        _arm_inject_monitor("/root/tokenharbor_inject_monitor.py", th_proc.pid, ts, "tokenharbor")
+        _arm_inject_monitor("/root/tokenharbor_inject_monitor.py", th_proc.pid, ts, "tokenharbor", th_count, th_before_ok)
     console.print("\n[dim]Both keep running after disconnect.[/dim]")
     Prompt.ask("\nPress Enter to continue", default="")
 
