@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 from rich.console import Console
+from rich.text import Text
 from rich.panel import Panel
 from rich.prompt import Prompt, Confirm, IntPrompt
 from rich.table import Table
@@ -117,6 +118,57 @@ def _clear_screen():
     console.clear()
 
 
+def _gradient_text(text: str, stops: list) -> "Text":
+    """Apply horizontal gradient across text. stops = [(pos, (r,g,b)), ...]."""
+    from rich.text import Text
+    out = Text()
+    chars = list(text)
+    n = len(chars)
+    for i, ch in enumerate(chars):
+        t = i / max(n - 1, 1)
+        # Find surrounding stops.
+        for s in range(len(stops) - 1):
+            p0, c0 = stops[s]
+            p1, c1 = stops[s + 1]
+            if p0 <= t <= p1:
+                f = (t - p0) / max(p1 - p0, 1e-9)
+                r = int(c0[0] + (c1[0] - c0[0]) * f)
+                g = int(c0[1] + (c1[1] - c0[1]) * f)
+                b = int(c0[2] + (c1[2] - c0[2]) * f)
+                break
+        else:
+            r, g, b = stops[-1][1]
+        if ch == " ":
+            out.append(ch)
+        else:
+            out.append(ch, style=f"bold #{r:02x}{g:02x}{b:02x}")
+    return out
+
+
+FARM_ART = [
+    "███████╗ █████╗ ██████╗ ███╗   ███╗",
+    "██╔════╝██╔══██╗██╔══██╗████╗ ████║",
+    "█████╗  ███████║██████╔╝██╔████╔██║",
+    "██╔══╝  ██╔══██║██╔══██╗██║╚██╔╝██║",
+    "██║     ██║  ██║██║  ██║██║ ╚═╝ ██║",
+    "╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝",
+]
+# Orange -> pink -> purple (like the KEDAI VPN photo).
+FARM_GRADIENT = [
+    (0.0, (255, 165, 0)),    # orange
+    (0.5, (255, 20, 147)),    # pink
+    (1.0, (148, 0, 211)),     # purple
+]
+FARM_INDENT = " " * 21
+
+
+def _farm_header():
+    for line in FARM_ART:
+        console.print(Text(FARM_INDENT) + _gradient_text(line, FARM_GRADIENT))
+    console.print(Text(" " * 20 + "TokenHarbor Farm — Interactive TUI",
+                       style="bold bright_cyan"))
+
+
 TUI_BANNER = r"""
 [bold cyan]
                      ███████╗ █████╗ ██████╗ ███╗   ███╗
@@ -145,7 +197,7 @@ HARBOR_BANNER = r"""
 
 
 def _header():
-    console.print(TUI_BANNER)
+    _farm_header()
 
 
 MISTRAL_BANNER = r"""
