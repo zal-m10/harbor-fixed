@@ -464,19 +464,10 @@ def menu_run_farm():
         console.print(f"[dim]Log: {logfile}[/dim]")
         console.print("[dim]You can disconnect — it keeps running.[/dim]")
         console.print("[dim]Check progress via menu [2] Results → [b] Background log.[/dim]")
-        # Arm inject monitor if auto-inject is ON.
+        # Arm monitor if auto-inject ON or Telegram configured.
         state = _load_state()
-        if state.get("tokenharbor_auto_inject", False):
-            monitor = Path("/root/tokenharbor_inject_monitor.py")
-            if monitor.exists():
-                mlog = f"/tmp/tokenharbor-inject-{ts}.log"
-                with open(mlog, "w") as mlf:
-                    subprocess.Popen(
-                        ["nohup", sys.executable, str(monitor), str(proc.pid)],
-                        stdout=mlf, stderr=subprocess.STDOUT,
-                        start_new_session=True,
-                    )
-                console.print(f"[dim]Auto-inject monitor armed (log: {mlog})[/dim]")
+        if _should_arm_monitor(state, "tokenharbor_auto_inject"):
+            _arm_inject_monitor("/root/tokenharbor_inject_monitor.py", proc.pid, ts, "tokenharbor")
     else:
         try:
             subprocess.run(cmd, cwd=str(REPO_DIR))
@@ -1018,21 +1009,10 @@ def menu_mistral_run_farm():
             )
         console.print(f"[green]✓ Mistral farm started in background (PID {proc.pid}).[/green]")
         console.print(f"[dim]Log: {logfile}[/dim]")
-        # Spawn inject monitor if auto-inject is ON.
+        # Arm monitor if auto-inject ON or Telegram configured.
         state = _load_state()
-        if state.get("mistral_auto_inject", False):
-            monitor = Path("/root/mistral_inject_monitor.py")
-            if monitor.exists():
-                mlog = f"/tmp/mistral-inject-{ts}.log"
-                with open(mlog, "w") as mlf:
-                    subprocess.Popen(
-                        ["nohup", sys.executable, str(monitor), str(proc.pid)],
-                        stdout=mlf, stderr=subprocess.STDOUT,
-                        start_new_session=True,
-                    )
-                console.print(f"[dim]Auto-inject monitor armed (log: {mlog})[/dim]")
-            else:
-                console.print("[yellow]⚠ Monitor script not found, auto-inject may not run.[/yellow]")
+        if _should_arm_monitor(state, "mistral_auto_inject"):
+            _arm_inject_monitor("/root/mistral_inject_monitor.py", proc.pid, ts, "mistral")
     else:
         try:
             subprocess.run(cmd)
@@ -1255,6 +1235,30 @@ def menu_mistral_inject_toggle():
 # Parallel farm
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
+def _should_arm_monitor(state: dict, inject_key: str) -> bool:
+    """Arm monitor if auto-inject is ON or Telegram is configured."""
+    if state.get(inject_key, False):
+        return True
+    return bool(state.get("telegram_bot_token") and state.get("telegram_chat_id"))
+
+
+def _arm_inject_monitor(monitor_path: str, pid: int, ts: str, label: str):
+    """Spawn inject+notify monitor for a background farm PID."""
+    monitor = Path(monitor_path)
+    if not monitor.exists():
+        console.print(f"[yellow]⚠ Monitor script not found: {monitor_path}[/yellow]")
+        return
+    mlog = f"/tmp/{label}-inject-{ts}.log"
+    with open(mlog, "w") as mlf:
+        subprocess.Popen(
+            ["nohup", sys.executable, str(monitor), str(pid)],
+            stdout=mlf, stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+    console.print(f"[dim]  {label} monitor armed[/dim]")
+
+
 def menu_parallel_farm():
     _clear_screen(); _header()
     console.print("\n[bold bright_cyan]  Parallel Farm[/bold bright_cyan]\n")
@@ -1316,31 +1320,12 @@ def menu_parallel_farm():
     console.print(f"[dim]  Log: {th_log}[/dim]")
     console.print(f"[green]✓ Mistral farm started (PID {mistral_proc.pid})[/green]")
     console.print(f"[dim]  Log: {mistral_log}[/dim]")
-    # Arm inject monitor for Mistral if auto-inject is ON.
+    # Arm monitors if auto-inject ON or Telegram configured.
     state = _load_state()
-    if state.get("mistral_auto_inject", False):
-        monitor = Path("/root/mistral_inject_monitor.py")
-        if monitor.exists():
-            mlog = f"/tmp/mistral-inject-{ts}.log"
-            with open(mlog, "w") as mlf:
-                subprocess.Popen(
-                    ["nohup", sys.executable, str(monitor), str(mistral_proc.pid)],
-                    stdout=mlf, stderr=subprocess.STDOUT,
-                    start_new_session=True,
-                )
-            console.print(f"[dim]  Mistral auto-inject monitor armed[/dim]")
-    # Arm inject monitor for TokenHarbor if auto-inject is ON.
-    if state.get("tokenharbor_auto_inject", False):
-        monitor = Path("/root/tokenharbor_inject_monitor.py")
-        if monitor.exists():
-            mlog = f"/tmp/tokenharbor-inject-{ts}.log"
-            with open(mlog, "w") as mlf:
-                subprocess.Popen(
-                    ["nohup", sys.executable, str(monitor), str(th_proc.pid)],
-                    stdout=mlf, stderr=subprocess.STDOUT,
-                    start_new_session=True,
-                )
-            console.print(f"[dim]  TokenHarbor auto-inject monitor armed[/dim]")
+    if _should_arm_monitor(state, "mistral_auto_inject"):
+        _arm_inject_monitor("/root/mistral_inject_monitor.py", mistral_proc.pid, ts, "mistral")
+    if _should_arm_monitor(state, "tokenharbor_auto_inject"):
+        _arm_inject_monitor("/root/tokenharbor_inject_monitor.py", th_proc.pid, ts, "tokenharbor")
     console.print("\n[dim]Both keep running after disconnect.[/dim]")
     Prompt.ask("\nPress Enter to continue", default="")
 
