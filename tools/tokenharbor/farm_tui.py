@@ -491,6 +491,15 @@ def menu_run_farm():
                 console.print(f"[red]Inject failed: {err}[/red]")
             else:
                 console.print(f"[green]✓ Injected: {added} new, {skipped} already there.[/green]")
+        # Telegram notification.
+        try:
+            accounts = _get_accounts()
+            ok_keys = [a["api_key"] for a in accounts if a.get("ok") and a.get("api_key")]
+            total = len(accounts)
+            success = len(ok_keys)
+            _notify_farm_done("TokenHarbor", total, success, total - success, ok_keys)
+        except Exception:
+            pass
     Prompt.ask("\nPress Enter to continue", default="")
 
 
@@ -534,6 +543,18 @@ def _count_failed_from_logs() -> int:
         except OSError:
             pass
     return total
+
+
+def _get_accounts() -> list:
+    """Read all TokenHarbor farm accounts from account.json."""
+    if not RESULTS_PATH.exists():
+        return []
+    try:
+        data = json.loads(RESULTS_PATH.read_text())
+        accounts = data if isinstance(data, list) else [data]
+        return accounts if isinstance(accounts, list) else []
+    except (json.JSONDecodeError, OSError):
+        return []
 
 
 def menu_results():
@@ -1026,6 +1047,15 @@ def menu_mistral_run_farm():
                 console.print(f"[red]Inject failed: {err}[/red]")
             else:
                 console.print(f"[green]✓ Injected: {added} new, {skipped} already there.[/green]")
+        # Telegram notification.
+        try:
+            keys = _get_mistral_keys()
+            ok_keys = [k["api_key"] for k in keys if k.get("ok") and k.get("api_key")]
+            total = len(keys)
+            success = len(ok_keys)
+            _notify_farm_done("Mistral", total, success, total - success, ok_keys)
+        except Exception:
+            pass
     Prompt.ask("\nPress Enter to continue", default="")
 
 
@@ -1315,6 +1345,108 @@ def menu_parallel_farm():
     Prompt.ask("\nPress Enter to continue", default="")
 
 
+def _send_telegram(text: str, keys: list = None) -> tuple:
+    """Send Telegram notification. Returns (ok: bool, msg: str)."""
+    import urllib.request
+    state = _load_state()
+    token = state.get("telegram_bot_token")
+    chat_id = state.get("telegram_chat_id")
+    if not token or not chat_id:
+        return False, "Telegram not configured."
+
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    # Build inline keyboard with copy buttons for each key.
+    reply_markup = None
+    if keys:
+        buttons = []
+        for i, k in enumerate(keys[:10], 1):  # Telegram max ~8-10 buttons practical
+            buttons.append([{"text": f"📋 Salin Key {i}", "copy_text": {"text": k}}])
+        reply_markup = {"inline_keyboard": buttons}
+
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "HTML",
+    }
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
+
+    try:
+        data = json.dumps(payload).encode()
+        req = urllib.request.Request(url, data=data,
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            result = json.loads(resp.read().decode())
+            if result.get("ok"):
+                return True, "Sent."
+            return False, result.get("description", "Unknown error")
+    except Exception as e:
+        return False, str(e)
+
+
+def _notify_farm_done(provider: str, total: int, success: int, failed: int,
+                      keys: list = None):
+    """Send farm completion notification to Telegram if configured."""
+    state = _load_state()
+    if not state.get("telegram_bot_token") or not state.get("telegram_chat_id"):
+        return
+    text = (
+        f"✅ <b>Farm Selesai — {provider}</b>\n\n"
+        f"📦 Total batch: <b>{total}</b>\n"
+        f"🟢 Success: <b>{success}</b>\n"
+        f"🔴 Failed: <b>{failed}</b>"
+    )
+    if keys:
+        text += f"\n\n🔑 <b>{len(keys)} API Key:</b>"
+    ok, msg = _send_telegram(text, keys)
+    return ok
+
+
+def menu_setup_telegram():
+    _clear_screen(); _header()
+    console.print("\n[bold bright_cyan]  Setup Bot Telegram[/bold bright_cyan]\n")
+    state = _load_state()
+    cur_token = state.get("telegram_bot_token", "")
+    cur_chat = state.get("telegram_chat_id", "")
+    if cur_token:
+        console.print(f"  [dim]Bot token:[/dim] [green]set ({cur_token[:10]}...)")
+        console.print(f"  [dim]Chat ID:[/dim] [green]{cur_chat}[/green]\n")
+    else:
+        console.print("  [dim]Belum dikonfigurasi.[/dim]\n")
+
+    console.print("[1] Set / update Bot Token & Chat ID")
+    console.print("[2] Test kirim pesan")
+    console.print("[3] Hapus konfigurasi")
+    console.print("[0] Back\n")
+    choice = Prompt.ask("Select", choices=["0", "1", "2", "3"], default="0",
+                        show_choices=False)
+    if choice == "1":
+        token = Prompt.ask("Bot Token", default=cur_token or "")
+        chat_id = Prompt.ask("Chat ID", default=cur_chat or "")
+        if token and chat_id:
+            state["telegram_bot_token"] = token.strip()
+            state["telegram_chat_id"] = chat_id.strip()
+            _save_state(state)
+            console.print("\n[green]✓ Telegram dikonfigurasi.[/green]")
+        else:
+            console.print("\n[yellow]Dibatalkan — token dan chat ID wajib diisi.[/yellow]")
+    elif choice == "2":
+        if not cur_token or not cur_chat:
+            console.print("\n[yellow]Belum dikonfigurasi. Set dulu via [1].[/yellow]")
+        else:
+            ok, msg = _send_telegram("🔔 <b>Test notifikasi</b>\nBot Telegram terhubung!")
+            if ok:
+                console.print("\n[green]✓ Pesan test terkirim![/green]")
+            else:
+                console.print(f"\n[red]✗ Gagal: {msg}[/red]")
+    elif choice == "3":
+        state.pop("telegram_bot_token", None)
+        state.pop("telegram_chat_id", None)
+        _save_state(state)
+        console.print("\n[dim]Konfigurasi Telegram dihapus.[/dim]")
+    Prompt.ask("\nPress Enter to continue", default="")
+
+
 def main():
     while True:
         _clear_screen()
@@ -1336,10 +1468,11 @@ def main():
         menu.add_row("[3]", "Parallel farm", "run both farms in background")
         menu.add_row("[4]", "Delay setting", f"currently {state['delay']}s")
         menu.add_row("[5]", "Setup Proxy", f"{len(proxies)} configured" if proxies else "not configured")
+        menu.add_row("[6]", "Setup Bot Tele", "Telegram notifications")
         menu.add_row("[0]", "Exit", "")
         console.print(menu, justify="center")
         console.print()
-        choice = Prompt.ask("    [dim]Select Action[/dim]", choices=["0", "1", "2", "3", "4", "5"],
+        choice = Prompt.ask("    [dim]Select Action[/dim]", choices=["0", "1", "2", "3", "4", "5", "6"],
                             default="1", show_choices=False, show_default=False)
         if choice == "1":
             menu_tokenharbor()
@@ -1351,6 +1484,8 @@ def main():
             menu_delay_setting()
         elif choice == "5":
             menu_setup_proxy()
+        elif choice == "6":
+            menu_setup_telegram()
         else:
             console.print("\nBye.")
             break
