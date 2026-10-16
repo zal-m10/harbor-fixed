@@ -1855,7 +1855,7 @@ def menu_parallel_farm():
     Prompt.ask("\nPress Enter to continue", default="")
 
 
-def _send_telegram(text: str, keys: list = None) -> tuple:
+def _send_telegram(text: str) -> tuple:
     """Send Telegram notification. Returns (ok: bool, msg: str)."""
     import urllib.request
     state = _load_state()
@@ -1865,21 +1865,11 @@ def _send_telegram(text: str, keys: list = None) -> tuple:
         return False, "Telegram not configured."
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    # Build inline keyboard with copy buttons for each key.
-    reply_markup = None
-    if keys:
-        buttons = []
-        for i, k in enumerate(keys[:10], 1):  # Telegram max ~8-10 buttons practical
-            buttons.append([{"text": f"📋 Salin Key {i}", "copy_text": {"text": k}}])
-        reply_markup = {"inline_keyboard": buttons}
-
     payload = {
         "chat_id": chat_id,
         "text": text,
         "parse_mode": "HTML",
     }
-    if reply_markup:
-        payload["reply_markup"] = reply_markup
 
     try:
         data = json.dumps(payload).encode()
@@ -1894,21 +1884,36 @@ def _send_telegram(text: str, keys: list = None) -> tuple:
         return False, str(e)
 
 
+_INJECT_STATE_KEYS = {
+    "TokenHarbor": "tokenharbor_auto_inject",
+    "Mistral": "mistral_auto_inject",
+    "Dahl": "dahl_auto_inject",
+}
+
+
 def _notify_farm_done(provider: str, total: int, success: int, failed: int,
                       keys: list = None):
     """Send farm completion notification to Telegram if configured."""
+    import html as _html
     state = _load_state()
     if not state.get("telegram_bot_token") or not state.get("telegram_chat_id"):
         return
+    inject_on = state.get(_INJECT_STATE_KEYS.get(provider, ""), False)
+    inject_txt = "ON 🟢" if inject_on else "OFF 🔴"
+
+    title = f"✅ Farm Selesai — {provider}"
     text = (
-        f"✅ <b>Farm Selesai — {provider}</b>\n\n"
-        f"📦 Total batch: <b>{total}</b>\n"
-        f"🟢 Success: <b>{success}</b>\n"
-        f"🔴 Failed: <b>{failed}</b>"
+        f"{title.center(40)}\n"
+        f"📦 Total batch: {total}.     🟢 Success: {success}.    🔴 Failed: {failed}\n"
+        f"\n\n\n"
+        f"🔑 {len(keys or [])} API Key:\n"
     )
     if keys:
-        text += f"\n\n🔑 <b>{len(keys)} API Key:</b>"
-    ok, msg = _send_telegram(text, keys)
+        # Code block -> Telegram shows COPY CODE button.
+        escaped = "\n".join(_html.escape(k) for k in keys)
+        text += f"<pre>{escaped}</pre>\n"
+    text += f"\n🔄 Auto inject 9Router: <b>{inject_txt}</b>"
+    ok, msg = _send_telegram(text)
     return ok
 
 
