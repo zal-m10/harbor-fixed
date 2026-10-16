@@ -138,7 +138,7 @@ HARBOR_BANNER = r"""
                ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝  ╚═════╝ ╚═╝  ╚═╝
 [/bold cyan]
 [bold bright_cyan]                 TokenHarbor Auto CLI — HTTP Mode • No Browser[/bold bright_cyan]
-[dim italic]                                 FORKED FROM MASANTOID[/dim italic]
+[dim italic]                              FORKED FROM MASANTOID[/dim italic]
 """
 
 
