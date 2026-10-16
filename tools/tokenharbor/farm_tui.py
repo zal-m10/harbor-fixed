@@ -1660,34 +1660,19 @@ def menu_parallel_farm():
         Prompt.ask("\nPress Enter to continue", default="")
         return
 
-    # Step 1: select which farms to run.
-    farms = {
-        "1": ("TokenHarbor", True),
-        "2": ("Mistral", True),
-        "3": ("Dahl", True),
-    }
-    while True:
-        _clear_screen(); _header()
-        console.print("\n[bold]  Parallel Farm — Select APIs[/bold]\n")
-        console.print("[dim]Toggle with number, [d] done, [0] cancel[/dim]\n")
-        for num, (name, on) in farms.items():
-            mark = "[green][x][/green]" if on else "[dim][ ][/dim]"
-            console.print(f"  {mark} [{num}] {name}")
-        console.print()
-        c = Prompt.ask("Select", choices=["0", "1", "2", "3", "d"],
-                       default="d", show_choices=False)
-        if c == "0":
-            return
-        if c == "d":
-            break
-        name, on = farms[c]
-        farms[c] = (name, not on)
-
-    selected = [(n, name) for n, (name, on) in farms.items() if on]
-    if not selected:
+    # Step 1: select which farms to run (arrow keys + space).
+    chosen = _curses_multiselect(
+        "Select APIs to farm (↑↓ navigate, SPACE toggle, ENTER done, q cancel)",
+        ["TokenHarbor", "Mistral", "Dahl"],
+    )
+    if chosen is None:
+        return  # cancelled with q
+    if not chosen:
         console.print("\n[yellow]No farm selected.[/yellow]")
         Prompt.ask("\nPress Enter to continue", default="")
         return
+    selected = [(str(i + 1), name) for i, name in enumerate(
+        ["TokenHarbor", "Mistral", "Dahl"]) if name in chosen]
 
     # Validate prerequisites per selected farm.
     tempik = _get_tempik_url()
