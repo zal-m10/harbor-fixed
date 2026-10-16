@@ -612,7 +612,7 @@ def _show_bg_log() -> None:
 
 
 def _delete_results() -> None:
-    if not Confirm.ask("\n[red]Delete ALL farm results (emails + keys)?[/red]",
+    if not Confirm.ask("\n[red]Delete ALL farm results (emails + keys + logs)?[/red]",
                        default=False):
         console.print("Cancelled.")
         Prompt.ask("\nPress Enter to continue", default="")
@@ -622,7 +622,20 @@ def _delete_results() -> None:
     keys_file = REPO_DIR / "keys.txt"
     if keys_file.exists():
         keys_file.unlink()
-    console.print("[green]✓ All results deleted.[/green]")
+    # Clear farm logs so the Failed counter resets too.
+    for log in Path("/tmp").glob("farm-*.log"):
+        try:
+            log.unlink()
+        except OSError:
+            pass
+    # Clear stale PID file.
+    pidfile = Path("/tmp/farm.pid")
+    if pidfile.exists():
+        try:
+            pidfile.unlink()
+        except OSError:
+            pass
+    console.print("[green]✓ All results deleted (counter reset).[/green]")
     Prompt.ask("\nPress Enter to continue", default="")
 
 
