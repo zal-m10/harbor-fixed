@@ -1998,20 +1998,20 @@ def _notify_farm_done(provider: str, total: int, success: int, failed: int,
     if not state.get("telegram_bot_token") or not state.get("telegram_chat_id"):
         return
     inject_on = state.get(_INJECT_STATE_KEYS.get(provider, ""), False)
-    inject_txt = "ON 🟢" if inject_on else "OFF 🔴"
+    inject_txt = "ON ✓" if inject_on else "OFF <b>x</b>"
 
-    title = f"✅ Farm Selesai — {provider}"
+    title = f"✓ Farm Selesai — {provider}"
     text = (
         f"{title.center(40)}\n"
-        f"📦 Total batch: {total}.     🟢 Success: {success}.    🔴 Failed: {failed}\n"
+        f"Total batch: {total}.     ✓ Success: {success}.    <b>x</b> Failed: {failed}\n"
         f"\n\n\n"
-        f"🔑 {len(keys or [])} API Key:\n"
+        f"{len(keys or [])} API Key:\n"
     )
     if keys:
         # Code block -> Telegram shows COPY CODE button.
         escaped = "\n".join(_html.escape(k) for k in keys)
         text += f"<pre>{escaped}</pre>\n"
-    text += f"\n🔄 Auto inject 9Router: <b>{inject_txt}</b>"
+    text += f"\nAuto inject 9Router: <b>{inject_txt}</b>"
     ok, msg = _send_telegram(text)
     return ok
 
@@ -2048,7 +2048,7 @@ def menu_setup_telegram():
         if not cur_token or not cur_chat:
             console.print("\n[yellow]Belum dikonfigurasi. Set dulu via [1].[/yellow]")
         else:
-            ok, msg = _send_telegram("🔔 <b>Test notifikasi</b>\nBot Telegram terhubung!")
+            ok, msg = _send_telegram("<b>Test notifikasi</b>\nBot Telegram terhubung! ✓")
             if ok:
                 console.print("\n[green]✓ Pesan test terkirim![/green]")
             else:
