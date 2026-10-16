@@ -2002,7 +2002,7 @@ def _notify_farm_done(provider: str, total: int, success: int, failed: int,
 
     title = f"✓Farm Selesai — {provider}"
     text = (
-        f"{title.center(50)}\n"
+        f"{' ' * 14}{title}\n"
         f"Total batch: {total}.    ✓Success: {success}.   <b>✗</b>Failed: {failed}\n"
         f"\n\n\n"
         f"{len(keys or [])} API Key:\n"
