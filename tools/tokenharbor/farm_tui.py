@@ -1034,7 +1034,6 @@ def menu_mistral_inject_toggle():
         ok, msg = _check_9router()
         if not ok:
             console.print(f"\n[red]✗ {msg}[/red]")
-            console.print("[dim]Auto inject tetap OFF.[/dim]")
             Prompt.ask("\nPress Enter to continue", default="")
             return
         console.print(f"\n[dim]✓ {msg}[/dim]")
