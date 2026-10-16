@@ -1998,12 +1998,12 @@ def _notify_farm_done(provider: str, total: int, success: int, failed: int,
     if not state.get("telegram_bot_token") or not state.get("telegram_chat_id"):
         return
     inject_on = state.get(_INJECT_STATE_KEYS.get(provider, ""), False)
-    inject_txt = "ON ✓" if inject_on else "OFF <b>x</b>"
+    inject_txt = "ON ✓" if inject_on else "OFF <b>✗</b>"
 
     title = f"✓ Farm Selesai — {provider}"
     text = (
         f"{title.center(40)}\n"
-        f"Total batch: {total}.     ✓ Success: {success}.    <b>x</b> Failed: {failed}\n"
+        f"Total batch: {total}.     ✓ Success: {success}.    <b>✗</b> Failed: {failed}\n"
         f"\n\n\n"
         f"{len(keys or [])} API Key:\n"
     )
