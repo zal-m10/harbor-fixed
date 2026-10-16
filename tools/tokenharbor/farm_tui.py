@@ -1886,6 +1886,55 @@ PREMIUM_EMOJI = {
     "⏳": "6237942489903276139",
 }
 
+# Named custom emojis (from emojiPremium.js codebase).
+NAMED_EMOJI = {
+    "phone_order": "5967591100532134862",  # ☎️
+    "phone_apps": "5407025283456835913",   # 📱
+}
+
+
+def tg_emoji(emoji_id: str, fallback: str = "⭐") -> str:
+    """Build a <tg-emoji> tag from a custom emoji ID directly."""
+    return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
+
+
+def named_emoji(name: str, fallback: str = "⭐") -> str:
+    """Get a named custom emoji tag (phone_order, phone_apps)."""
+    eid = NAMED_EMOJI.get(name)
+    if not eid:
+        return fallback
+    return tg_emoji(eid, fallback)
+
+
+def get_first_emoji(text: str):
+    """Extract the first emoji from button text (for icon_custom_emoji_id)."""
+    import re
+    m = re.search(r"[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF]", text)
+    return m.group(0) if m else None
+
+
+def build_button(text: str, callback_data=None, extra=None) -> dict:
+    """Build a Telegram button dict with Bot API 9.4 support.
+
+    extra may contain: url, style ("primary"|"success"|"danger"),
+    icon_custom_emoji_id (auto-detected from first emoji in text).
+    """
+    extra = extra or {}
+    btn = {"text": text}
+    if callback_data:
+        btn["callback_data"] = callback_data
+    if extra.get("url"):
+        btn["url"] = extra["url"]
+    if extra.get("style"):
+        btn["style"] = extra["style"]
+    if extra.get("icon_custom_emoji_id"):
+        btn["icon_custom_emoji_id"] = extra["icon_custom_emoji_id"]
+    else:
+        first = get_first_emoji(text)
+        if first and first in PREMIUM_EMOJI:
+            btn["icon_custom_emoji_id"] = PREMIUM_EMOJI[first]
+    return btn
+
 
 def _premium_emoji(text: str) -> str:
     """Wrap known emojis in <tg-emoji> tags. Idempotent."""
