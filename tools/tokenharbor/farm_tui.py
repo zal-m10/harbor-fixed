@@ -165,8 +165,8 @@ FARM_INDENT = " " * 21
 def _farm_header():
     for line in FARM_ART:
         console.print(Text(FARM_INDENT) + _gradient_text(line, FARM_GRADIENT))
-    console.print(Text(" " * 20 + "TokenHarbor Farm — Interactive TUI",
-                       style="bold bright_cyan"))
+    console.print(_gradient_text(" " * 20 + "TokenHarbor Farm — Interactive TUI",
+                                 [(0.0, (255, 20, 147)), (1.0, (148, 0, 211))]))
 
 
 TUI_BANNER = r"""
@@ -1834,17 +1834,34 @@ def main():
         console.print()
 
         menu = Table(show_header=False, box=None, padding=(0, 2))
-        menu.add_column("key", style="bold bright_cyan", width=5, justify="right")
+        menu.add_column("key", width=5, justify="right")
         menu.add_column("label", style="white")
         menu.add_column("hint", style="dim")
-        menu.add_row("[1]", "Farm TokenHarbor", "TokenHarbor account farming")
-        menu.add_row("[2]", "Farm Mistral keys", "Mistral API key farming")
-        menu.add_row("[3]", "Farm Dahl keys", "Dahl Inference API keys")
-        menu.add_row("[4]", "Parallel farm", "run both farms in background")
-        menu.add_row("[5]", "Delay setting", f"currently {state['delay']}s")
-        menu.add_row("[6]", "Setup Proxy", f"{len(proxies)} configured" if proxies else "not configured")
-        menu.add_row("[7]", "Setup Bot Tele", "Telegram notifications")
-        menu.add_row("[0]", "Exit", "")
+        # Gradient numbers: sample FARM_GRADIENT across the menu items.
+        _nums = ["1", "2", "3", "4", "5", "6", "7", "0"]
+        def _gnum(n):
+            idx = _nums.index(n)
+            t = idx / max(len(_nums) - 1, 1)
+            for s in range(len(FARM_GRADIENT) - 1):
+                p0, c0 = FARM_GRADIENT[s]
+                p1, c1 = FARM_GRADIENT[s + 1]
+                if p0 <= t <= p1:
+                    f = (t - p0) / max(p1 - p0, 1e-9)
+                    r = int(c0[0] + (c1[0] - c0[0]) * f)
+                    g = int(c0[1] + (c1[1] - c0[1]) * f)
+                    b = int(c0[2] + (c1[2] - c0[2]) * f)
+                    break
+            else:
+                r, g, b = FARM_GRADIENT[-1][1]
+            return Text(f"[{n}]", style=f"bold #{r:02x}{g:02x}{b:02x}")
+        menu.add_row(_gnum("1"), "Farm TokenHarbor", "TokenHarbor account farming")
+        menu.add_row(_gnum("2"), "Farm Mistral keys", "Mistral API key farming")
+        menu.add_row(_gnum("3"), "Farm Dahl keys", "Dahl Inference API keys")
+        menu.add_row(_gnum("4"), "Parallel farm", "run both farms in background")
+        menu.add_row(_gnum("5"), "Delay setting", f"currently {state['delay']}s")
+        menu.add_row(_gnum("6"), "Setup Proxy", f"{len(proxies)} configured" if proxies else "not configured")
+        menu.add_row(_gnum("7"), "Setup Bot Tele", "Telegram notifications")
+        menu.add_row(_gnum("0"), "Exit", "")
         console.print(menu, justify="center")
         console.print()
         choice = Prompt.ask("    [dim]Select Action[/dim]", choices=["0", "1", "2", "3", "4", "5", "6", "7"],
