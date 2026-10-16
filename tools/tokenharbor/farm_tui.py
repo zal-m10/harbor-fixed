@@ -167,14 +167,14 @@ def _mistral_header():
 
 DAHL_BANNER = r"""
 [bold green]
-                    ██████╗  █████╗ ██╗  ██╗██╗
-                    ██╔══██╗██╔══██╗██║  ██║██║
-                    ██║  ██║███████║███████║██║
-                    ██║  ██║██╔══██║██╔══██║██║
-                    ██████╔╝██║  ██║██║  ██║███████╗
-                    ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝
+                      ██████╗  █████╗ ██╗  ██╗██╗
+                      ██╔══██╗██╔══██╗██║  ██║██║
+                      ██║  ██║███████║███████║██║
+                      ██║  ██║██╔══██║██╔══██║██║
+                      ██████╔╝██║  ██║██║  ██║███████╗
+                      ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝
 [/bold green]
-[bold bright_green]              Dahl Farm Auto CLI — HTTP Mode • No Browser[/bold bright_green]
+[bold bright_green]                Dahl Farm Auto CLI — HTTP Mode • No Browser[/bold bright_green]
 """
 
 
