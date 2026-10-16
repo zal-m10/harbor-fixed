@@ -1871,6 +1871,36 @@ def menu_parallel_farm():
     Prompt.ask("\nPress Enter to continue", default="")
 
 
+# Telegram Premium custom emoji IDs (from emojiPremium.js).
+# Rendered via <tg-emoji emoji-id="..."> in HTML parse mode.
+PREMIUM_EMOJI = {
+    "✅": "5350342542762209455",
+    "📦": "5854908544712707500",
+    "🟢": "5453902265922376865",
+    "🔴": "5440539497383087970",
+    "🔑": "5197288647275071607",
+    "🔄": "6251145511428950009",
+}
+
+
+def _premium_emoji(text: str) -> str:
+    """Wrap known emojis in <tg-emoji> tags. Idempotent."""
+    import re
+    # Skip already-wrapped segments.
+    saved = []
+
+    def _save(m):
+        saved.append(m.group(0))
+        return f"\x00PREMIUM{len(saved) - 1}\x00"
+
+    safe = re.sub(r"<tg-emoji[^>]*>.*?</tg-emoji>", _save, text, flags=re.DOTALL)
+    for emoji, eid in PREMIUM_EMOJI.items():
+        safe = safe.replace(emoji, f'<tg-emoji emoji-id="{eid}">{emoji}</tg-emoji>')
+    for i, orig in enumerate(saved):
+        safe = safe.replace(f"\x00PREMIUM{i}\x00", orig)
+    return safe
+
+
 def _send_telegram(text: str) -> tuple:
     """Send Telegram notification. Returns (ok: bool, msg: str)."""
     import urllib.request
@@ -1883,7 +1913,7 @@ def _send_telegram(text: str) -> tuple:
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
         "chat_id": chat_id,
-        "text": text,
+        "text": _premium_emoji(text),
         "parse_mode": "HTML",
     }
 
