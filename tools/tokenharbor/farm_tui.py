@@ -146,6 +146,23 @@ def _header():
     console.print(TUI_BANNER)
 
 
+MISTRAL_BANNER = r"""
+[bold magenta]
+               ███╗   ███╗██╗███████╗████████╗██████╗  █████╗ ██╗
+               ████╗ ████║██║██╔════╝╚══██╔══╝██╔══██╗██╔══██╗██║
+               ██╔████╔██║██║███████╗   ██║   ██████╔╝███████║██║
+               ██║╚██╔╝██║██║╚════██║   ██║   ██╔══██╗██╔══██║██║
+               ██║ ╚═╝ ██║██║███████║   ██║   ██║  ██║██║  ██║███████╗
+               ╚═╝     ╚═╝╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝
+[/bold magenta]
+[bold bright_magenta]              Mistral Farm Auto CLI — HTTP Mode • No Browser[/bold bright_magenta]
+"""
+
+
+def _mistral_header():
+    console.print(MISTRAL_BANNER)
+
+
 def _harbor_header():
     console.print(HARBOR_BANNER)
 
@@ -524,7 +541,7 @@ def menu_results():
     if ok:
         t = Table(title="Farmed accounts", show_lines=True)
         t.add_column("#", style="dim", width=3)
-        t.add_column("Email", style="cyan")
+        t.add_column("Email", style="magenta")
         t.add_column("API key", style="green")
         t.add_column("Free models", width=11)
         for i, a in enumerate(ok, 1):
@@ -737,8 +754,8 @@ def _count_mistral_running() -> int:
 
 
 def menu_mistral_run_farm():
-    _clear_screen(); _header()
-    console.print("\n[bold bright_cyan]  Mistral Farm[/bold bright_cyan]\n")
+    _clear_screen(); _mistral_header()
+    console.print()
     if not MISTRAL_SCRIPT.exists():
         console.print(f"[red]✗ Mistral farm script not found: {MISTRAL_SCRIPT}[/red]")
         Prompt.ask("\nPress Enter to continue", default="")
@@ -747,7 +764,7 @@ def menu_mistral_run_farm():
     proxies = _get_proxies()
     if not proxies:
         console.print("[yellow]⚠ No proxy configured.[/yellow]")
-        console.print("Set proxies via main menu [cyan]Setup Proxy[/cyan].")
+        console.print("Set proxies via main menu [magenta]Setup Proxy[/magenta].")
         Prompt.ask("\nPress Enter to continue", default="")
         return
 
@@ -786,19 +803,19 @@ def menu_mistral_run_farm():
 
 
 def menu_mistral_results():
-    _clear_screen(); _header()
-    console.print("\n[bold bright_cyan]  Mistral Farm — Results[/bold bright_cyan]\n")
+    _clear_screen(); _mistral_header()
+    console.print()
     keys = _get_mistral_keys()
     ok = [k for k in keys if k["ok"]]
     running = _count_mistral_running()
 
-    console.print(f"[bold]Running: [cyan]{running}[/cyan] | "
+    console.print(f"[bold]Running: [magenta]{running}[/magenta] | "
                   f"[green]Success: {len(ok)}[/green] | "
                   f"[dim]Total: {len(keys)}[/dim][/bold]\n")
     if ok:
         t = Table(title="Mistral API keys", show_lines=True)
         t.add_column("#", style="dim", width=3)
-        t.add_column("Email", style="cyan")
+        t.add_column("Email", style="magenta")
         t.add_column("API key", style="green")
         for i, k in enumerate(ok, 1):
             t.add_row(str(i), k["email"], k["api_key"])
@@ -811,11 +828,11 @@ def menu_mistral_results():
     console.print()
     bar = _Text()
     if ok:
-        bar.append("[c] ", style="bold cyan")
+        bar.append("[c] ", style="bold magenta")
         bar.append("Copy all API  ")
-        bar.append("[d] ", style="bold cyan")
+        bar.append("[d] ", style="bold magenta")
         bar.append("Delete all results  ")
-    bar.append("[Enter] ", style="bold cyan")
+    bar.append("[Enter] ", style="bold magenta")
     bar.append("Back")
     console.print(bar)
     choices = ["c", "d", ""] if ok else [""]
@@ -846,19 +863,19 @@ def menu_mistral():
     """Mistral farm submenu."""
     while True:
         _clear_screen()
-        _header()
-        console.print("\n[bold bright_cyan]  Mistral Farm[/bold bright_cyan]\n")
+        _mistral_header()
+        console.print()
         proxies = _get_proxies()
         running = _count_mistral_running()
         keys = _get_mistral_keys()
         ok = len([k for k in keys if k["ok"]])
 
         console.print(f"  [dim]proxy:[/dim] {'[green]' + str(len(proxies)) + ' set[/green]' if proxies else '[red]not set[/red]'}   "
-                      f"[dim]running:[/dim] [cyan]{running}[/cyan]   "
+                      f"[dim]running:[/dim] [magenta]{running}[/magenta]   "
                       f"[dim]keys:[/dim] [green]{ok}[/green]\n")
 
         menu = Table(show_header=False, box=None, padding=(0, 2))
-        menu.add_column("key", style="bold bright_cyan", width=5, justify="right")
+        menu.add_column("key", style="bold bright_magenta", width=5, justify="right")
         menu.add_column("label", style="white")
         menu.add_column("hint", style="dim")
         menu.add_row("[1]", "Run farm", "farm Mistral API keys")
@@ -888,7 +905,7 @@ def menu_parallel_farm():
     proxies = _get_proxies()
     if not proxies:
         console.print("[yellow]⚠ No proxy configured.[/yellow]")
-        console.print("Set proxies via main menu [cyan]Setup Proxy[/cyan].")
+        console.print("Set proxies via main menu [magenta]Setup Proxy[/magenta].")
         Prompt.ask("\nPress Enter to continue", default="")
         return
 
