@@ -621,7 +621,7 @@ def _run_status(email: str, password: str) -> int:
 
 
 def _run_browser_farm(count: int, headed: bool = False,
-                      delay: int = 30, email_provider: str = "tempik") -> int:
+                      delay: int = 30, email_provider: str = "tempmail") -> int:
     """Full-auto farm: real Chromium signup + HTTP for the rest."""
     _print_banner()
     try:
@@ -847,7 +847,7 @@ def _parse_args():
     p.add_argument("--delay", type=int, default=30,
                    help="Seconds to wait between accounts (rate-limit safety)")
     p.add_argument("--email-provider", choices=["tempik", "tempmail"],
-                   default="tempik",
+                   default="tempmail",
                    help="Disposable email provider for verification")
 
     return parser.parse_args()

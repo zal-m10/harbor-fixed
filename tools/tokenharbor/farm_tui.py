@@ -242,7 +242,7 @@ def _status_line(state: dict, proxies: list, tempik, capsolver) -> None:
     def dot(ok: bool) -> str:
         return "[bright_green]●[/bright_green]" if ok else "[bright_red]●[/bright_red]"
     proxy_txt = f"{len(proxies)} proxies" if proxies else "no proxy"
-    email_provider = state.get("tokenharbor_email_provider", "tempik")
+    email_provider = state.get("tokenharbor_email_provider", "tempmail")
     capsolver_on = state.get("capsolver_enabled", bool(capsolver))
     console.print(
         f"{dot(bool(proxies))} [white]{proxy_txt}[/white]   "
@@ -464,7 +464,7 @@ def _curses_multiselect(title: str, items: list) -> list | None:
 def menu_setup_tempik():
     _clear_screen(); _harbor_header()
     state = _load_state()
-    provider = state.get("tokenharbor_email_provider", "tempik")
+    provider = state.get("tokenharbor_email_provider", "tempmail")
     current = _get_tempik_url()
     console.print(f"\nEmail provider: [cyan]{provider}[/cyan]")
     console.print(f"Tempik URL: [cyan]{current or '-'}[/cyan]\n")
@@ -511,7 +511,7 @@ def menu_run_farm():
     # Tempik and Capsolver are both optional: the farm also runs with
     # Temp Mail (tempmail.lol) and without any captcha solver.
     state = _load_state()
-    email_provider = state.get("tokenharbor_email_provider", "tempik")
+    email_provider = state.get("tokenharbor_email_provider", "tempmail")
     capsolver_enabled = state.get("capsolver_enabled", bool(_get_capsolver()))
 
     proxies = _get_proxies()
@@ -845,7 +845,7 @@ def menu_tokenharbor():
         menu.add_column("hint", style="dim")
         menu.add_row("[1]", "Run farm", "start farming accounts")
         menu.add_row("[2]", "Results", "view farmed accounts")
-        _email_provider = state.get("tokenharbor_email_provider", "tempik")
+        _email_provider = state.get("tokenharbor_email_provider", "tempmail")
         _capsolver_on = state.get("capsolver_enabled", bool(capsolver))
         menu.add_row("[3]", "Setup email", f"currently: {_email_provider}")
         menu.add_row("[4]", "Setup capsolver", f"currently: {'ON' if _capsolver_on else 'OFF'}")
@@ -1912,7 +1912,7 @@ def menu_parallel_farm():
         py = str(venv_python) if venv_python.exists() else sys.executable
         th_cmd = [py, "-m", "tools.tokenharbor.cli", "browser-farm",
                   "--count", str(counts["TokenHarbor"]), "--delay", str(delay),
-                  "--email-provider", state.get("tokenharbor_email_provider", "tempik")]
+                  "--email-provider", state.get("tokenharbor_email_provider", "tempmail")]
         th_log = f"/tmp/farm-{ts}.log"
         th_pid = _spawn_detached(th_cmd, th_log, cwd=str(REPO_DIR))
         procs["TokenHarbor"] = (th_pid, th_log)

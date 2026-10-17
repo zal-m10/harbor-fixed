@@ -191,7 +191,7 @@ def browser_signup(email: str, password: str,
             browser.close()
 
 
-def _make_email_client(provider: str = "tempik"):
+def _make_email_client(provider: str = "tempmail"):
     """Create the disposable-email client for the chosen provider.
 
     tempik   -> TempikClient (user's own Tempik instance)
@@ -206,7 +206,7 @@ def _make_email_client(provider: str = "tempik"):
 
 def auto_farm_one(client, headless: bool = True,
                   proxy: Optional[str] = None,
-                  email_provider: str = "tempik") -> dict:
+                  email_provider: str = "tempmail") -> dict:
     """Full automated pipeline: disposable email -> browser signup ->
     verify -> login -> API key -> free models. Returns account dict."""
     import re as _re

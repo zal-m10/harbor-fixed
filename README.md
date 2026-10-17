@@ -11,7 +11,7 @@ Fork dari [hirotomasato/harbor](https://github.com/hirotomasato/harbor), dikemba
 - **Auto-inject 9Router** — key hasil farm otomatis masuk ke SQLite 9Router (berbasis baseUrl, idempoten, skip duplikat)
 - **Notifikasi Telegram** — ringkasan + daftar key per run, termasuk progress per 30 key untuk batch besar
 - **Rotasi proxy** per akun, format `user:pass@host:port`
-- **Pilihan email disposable**: Tempik (instance sendiri) atau Temp Mail (tempmail.lol, tanpa setup)
+- **Pilihan email disposable**: Tempik (instance sendiri) atau Temp Mail (tempmail.lol, tanpa setup, **default**)
 - **Capsolver opsional** — bisa ON/OFF, farm tetap jalan tanpanya
 - **Parallel farm** — semua provider jalan background sekaligus, tahan disconnect SSH
 
@@ -70,7 +70,7 @@ Menu utama:
 |----|------|------------|
 | 1 | Run farm | foreground (live) atau background |
 | 2 | Results | lihat/hapus hasil, salin semua key |
-| 3 | Setup email | pilih **Tempik** atau **Temp Mail**; atur URL Tempik |
+| 3 | Setup email | pilih **Tempik** atau **Temp Mail** (default); atur URL Tempik |
 | 4 | Setup capsolver | toggle ON/OFF, set/hapus API key |
 | 5 | Auto inject 9Router | ON/OFF |
 | 0 | Back | |
@@ -96,7 +96,7 @@ File ini tidak ikut ke repo (gitignored) karena berisi kredensial.
 Dua pilihan:
 
 - **Tempik** — instance Tempik milikmu sendiri. Masukkan base URL-nya, misal `https://tempik.domain-kamu.com`.
-- **Temp Mail** — pakai tempmail.lol, tanpa setup apa-apa. Catatan: pengiriman email verifikasi ke domain temp-mail belum selalu konsisten — kalau verifikasi tidak masuk, pakai Tempik.
+- **Temp Mail** — pakai tempmail.lol, tanpa setup apa-apa (default). Catatan: pengiriman email verifikasi ke domain temp-mail belum selalu konsisten — kalau verifikasi tidak masuk, pakai Tempik.
 
 ### Capsolver — [1] > [4] Setup capsolver
 
