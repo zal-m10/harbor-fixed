@@ -1,13 +1,13 @@
 #!/bin/bash
 # Harbor Fixed — one-line installer.
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/zal-m10/harbor-fixed/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/zal-m10/universal-farm/main/install.sh | bash
 #   or:
-#   wget -qO- https://raw.githubusercontent.com/zal-m10/harbor-fixed/main/install.sh | bash
+#   wget -qO- https://raw.githubusercontent.com/zal-m10/universal-farm/main/install.sh | bash
 set -e
 
-REPO_URL="https://github.com/zal-m10/harbor-fixed.git"
-INSTALL_DIR="$HOME/harbor-fixed"
+REPO_URL="https://github.com/zal-m10/universal-farm.git"
+INSTALL_DIR="$HOME/universal-farm"
 
 echo "=== Harbor Fixed installer ==="
 

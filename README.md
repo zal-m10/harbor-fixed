@@ -18,24 +18,24 @@ Fork dari [hirotomasato/harbor](https://github.com/hirotomasato/harbor), dikemba
 ## Instalasi (one-line)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/zal-m10/harbor-fixed/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/zal-m10/universal-farm/main/install.sh | bash
 ```
 
 atau dengan `wget`:
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/zal-m10/harbor-fixed/main/install.sh | bash
+wget -qO- https://raw.githubusercontent.com/zal-m10/universal-farm/main/install.sh | bash
 ```
 
-Script installer akan: install paket sistem (python3, git, curl), clone repo ke `~/harbor-fixed`, buat virtualenv + install dependensi Python, install Chromium untuk Playwright, dan memasang perintah `farm`.
+Script installer akan: install paket sistem (python3, git, curl), clone repo ke `~/universal-farm`, buat virtualenv + install dependensi Python, install Chromium untuk Playwright, dan memasang perintah `farm`.
 
 Setelah selesai, ketik `farm` untuk membuka menu.
 
 ## Instalasi manual
 
 ```bash
-git clone https://github.com/zal-m10/harbor-fixed.git
-cd harbor-fixed
+git clone https://github.com/zal-m10/universal-farm.git
+cd universal-farm
 python3 -m venv .venv
 .venv/bin/pip install playwright requests rich
 .venv/bin/python -m playwright install chromium
@@ -128,8 +128,8 @@ File kredensial dan proxy (`tools/.capsolver_key`, `tools/proxies.txt`, `account
 
 ```bash
 pkg update -y && pkg install -y python git curl
-git clone https://github.com/zal-m10/harbor-fixed
-cd harbor-fixed
+git clone https://github.com/zal-m10/universal-farm
+cd universal-farm
 python -m venv .venv
 .venv/bin/pip install requests rich playwright
 ```
@@ -155,7 +155,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 **Email verifikasi tidak masuk (Temp Mail)** — coba pakai Tempik (instance sendiri) yang pengirimannya lebih konsisten.
 
-**`bash: tools/.capsolver_key: No such file or directory`** — perintah dijalankan di luar folder repo. `cd harbor-fixed` dulu.
+**`bash: tools/.capsolver_key: No such file or directory`** — perintah dijalankan di luar folder repo. `cd universal-farm` dulu.
 
 ## Perbedaan dari upstream
 
