@@ -39,8 +39,7 @@ def browser_signup(email: str, password: str,
                    headless: bool = True,
                    timeout_ms: int = 120_000,
                    proxy: Optional[str] = None,
-                   verbose: bool = True,
-                   invite_code: Optional[str] = None) -> dict:
+                   verbose: bool = True) -> dict:
     """Run a real-browser signup. Returns {'ok', 'email', 'password', 'error'}."""
     def log(msg: str):
         if verbose:
@@ -118,26 +117,6 @@ def browser_signup(email: str, password: str,
             pw = page.query_selector('input[type="password"]')
             if pw:
                 pw.fill(password)
-            if invite_code:
-                log("filling invite code ...")
-                try:
-                    page.get_by_label(re.compile("invite", re.I)).fill(invite_code)
-                    log("invite code filled (via label)")
-                except Exception:
-                    # Fallback: first empty visible text input that isn't email/password.
-                    filled = False
-                    for inp in page.query_selector_all("input"):
-                        try:
-                            t = (inp.get_attribute("type") or "text").lower()
-                            if t in ("email", "password", "hidden", "submit", "checkbox"):
-                                continue
-                            if not (inp.input_value() or "").strip() and inp.is_visible():
-                                inp.fill(invite_code)
-                                filled = True
-                                break
-                        except Exception:
-                            continue
-                    log(f"invite code filled (fallback): {filled}")
 
             # Wait for Turnstile to auto-verify: the widget injects a hidden
             # input named cf-turnstile-response with a token value.
@@ -227,8 +206,7 @@ def _make_email_client(provider: str = "tempik"):
 
 def auto_farm_one(client, headless: bool = True,
                   proxy: Optional[str] = None,
-                  email_provider: str = "tempik",
-                  invite_code: Optional[str] = None) -> dict:
+                  email_provider: str = "tempik") -> dict:
     """Full automated pipeline: disposable email -> browser signup ->
     verify -> login -> API key -> free models. Returns account dict."""
     import re as _re
@@ -238,8 +216,7 @@ def auto_farm_one(client, headless: bool = True,
     email = inbox["address"] if isinstance(inbox, dict) else inbox
     password = _gen_password()
     print(f"[*] browser signup for {email} ...")
-    r = browser_signup(email, password, headless=headless, proxy=proxy,
-                       invite_code=invite_code)
+    r = browser_signup(email, password, headless=headless, proxy=proxy)
     if not r.get("ok"):
         return {"ok": False, "stage": "browser_signup", **r}
 

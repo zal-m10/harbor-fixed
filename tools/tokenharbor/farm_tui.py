@@ -494,25 +494,6 @@ def menu_setup_tempik():
     Prompt.ask("\nPress Enter to continue", default="")
 
 
-def menu_setup_invite_code():
-    _clear_screen(); _harbor_header()
-    state = _load_state()
-    current = state.get("tokenharbor_invite_code", "")
-    masked = (current[:4] + "..." if current else "-")
-    console.print(f"\nCurrent invite code: [cyan]{masked}[/cyan]")
-    console.print("[dim]Filled into the INVITE CODE field on the signup form.[/dim]\n")
-    val = Prompt.ask("Enter invite code (empty to clear, 'q' to cancel)")
-    if val.lower() == "q":
-        return
-    state["tokenharbor_invite_code"] = val.strip()
-    _save_state(state)
-    if val.strip():
-        console.print("[green]Invite code saved.[/green]")
-    else:
-        console.print("[yellow]Invite code cleared.[/yellow]")
-    Prompt.ask("\nPress Enter to continue", default="")
-
-
 def menu_delay_setting():
     _clear_screen(); _header()
     state = _load_state()
@@ -532,7 +513,6 @@ def menu_run_farm():
     state = _load_state()
     email_provider = state.get("tokenharbor_email_provider", "tempik")
     capsolver_enabled = state.get("capsolver_enabled", bool(_get_capsolver()))
-    invite_code = state.get("tokenharbor_invite_code", "")
 
     proxies = _get_proxies()
     if not proxies:
@@ -551,7 +531,6 @@ def menu_run_farm():
                    else f"Tempik ({_get_tempik_url() or 'URL not set'})")
     console.print(f"\n[dim]Email: {email_label}[/dim]")
     console.print(f"[dim]Capsolver: {'ON' if capsolver_enabled else 'OFF'}[/dim]")
-    console.print(f"[dim]Invite code: {(invite_code[:4] + '...') if invite_code else '-'}[/dim]")
     console.print(f"[dim]Proxy: {proxy_info}[/dim]")
     console.print(f"[dim]Delay: {delay}s[/dim]\n")
 
@@ -575,8 +554,7 @@ def menu_run_farm():
     py = str(venv_python) if venv_python.exists() else sys.executable
     cmd = [py, "-m", "tools.tokenharbor.cli", "browser-farm",
            "--count", str(count), "--delay", str(delay),
-           "--email-provider", email_provider,
-           "--invite-code", invite_code]
+           "--email-provider", email_provider]
 
     if bg_choice == "2":
         import datetime as _dt
@@ -872,13 +850,10 @@ def menu_tokenharbor():
         menu.add_row("[3]", "Setup email", f"currently: {_email_provider}")
         menu.add_row("[4]", "Setup capsolver", f"currently: {'ON' if _capsolver_on else 'OFF'}")
         menu.add_row("[5]", "Auto inject 9Router", f"currently {('ON' if th_inject_on else 'OFF')}")
-        _invite = state.get("tokenharbor_invite_code", "")
-        menu.add_row("[6]", "Setup invite code",
-                     f"currently: {(_invite[:4] + '...') if _invite else '-'}")
         menu.add_row("[0]", "Back", "")
         console.print(menu, justify="center")
         console.print()
-        choice = Prompt.ask("    [dim]Select Action[/dim]", choices=["0", "1", "2", "3", "4", "5", "6"],
+        choice = Prompt.ask("    [dim]Select Action[/dim]", choices=["0", "1", "2", "3", "4", "5"],
                             default="1", show_choices=False, show_default=False)
         if choice == "1":
             menu_run_farm()
@@ -890,8 +865,6 @@ def menu_tokenharbor():
             menu_setup_capsolver()
         elif choice == "5":
             menu_tokenharbor_inject_toggle()
-        elif choice == "6":
-            menu_setup_invite_code()
         else:
             return
 
@@ -1939,8 +1912,7 @@ def menu_parallel_farm():
         py = str(venv_python) if venv_python.exists() else sys.executable
         th_cmd = [py, "-m", "tools.tokenharbor.cli", "browser-farm",
                   "--count", str(counts["TokenHarbor"]), "--delay", str(delay),
-                  "--email-provider", state.get("tokenharbor_email_provider", "tempik"),
-                  "--invite-code", state.get("tokenharbor_invite_code", "")]
+                  "--email-provider", state.get("tokenharbor_email_provider", "tempik")]
         th_log = f"/tmp/farm-{ts}.log"
         th_pid = _spawn_detached(th_cmd, th_log, cwd=str(REPO_DIR))
         procs["TokenHarbor"] = (th_pid, th_log)
