@@ -621,7 +621,8 @@ def _run_status(email: str, password: str) -> int:
 
 
 def _run_browser_farm(count: int, headed: bool = False,
-                      delay: int = 30, email_provider: str = "tempik") -> int:
+                      delay: int = 30, email_provider: str = "tempik",
+                      invite_code: str = "") -> int:
     """Full-auto farm: real Chromium signup + HTTP for the rest."""
     _print_banner()
     try:
@@ -651,7 +652,8 @@ def _run_browser_farm(count: int, headed: bool = False,
             client = TokenHarborClient(capsolver_key=capsolver_key, proxy=proxy)
             try:
                 result = auto_farm_one(client, headless=not headed, proxy=proxy,
-                                       email_provider=email_provider)
+                                       email_provider=email_provider,
+                                       invite_code=invite_code or None)
             except Exception as e:
                 console.print(f"[red]✗ Failed:[/red] {e}")
                 result = {"ok": False, "stage": "exception", "error": str(e)}
@@ -849,6 +851,8 @@ def _parse_args():
     p.add_argument("--email-provider", choices=["tempik", "tempmail"],
                    default="tempik",
                    help="Disposable email provider for verification")
+    p.add_argument("--invite-code", default="",
+                   help="Invite code for the signup form (optional)")
 
     return parser.parse_args()
 
@@ -876,7 +880,8 @@ def main() -> int:
         return _run_status(args.email, args.password)
     elif args.command == "browser-farm":
         return _run_browser_farm(args.count, headed=args.headed, delay=args.delay,
-                                 email_provider=args.email_provider)
+                                 email_provider=args.email_provider,
+                                 invite_code=args.invite_code)
     else:
         return _interactive_menu()
 
