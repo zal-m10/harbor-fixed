@@ -578,7 +578,7 @@ def menu_run_farm():
         # Arm monitor if auto-inject ON or Telegram configured.
         state = _load_state()
         if _should_arm_monitor(state, "tokenharbor_auto_inject"):
-            _arm_inject_monitor("/root/tokenharbor_inject_monitor.py", farm_pid, ts, "tokenharbor",
+            _arm_inject_monitor(str(_monitor_path("tokenharbor")), farm_pid, ts, "tokenharbor",
                                 count, sorted(_before_keys_th))
     else:
         try:
@@ -1131,7 +1131,7 @@ def menu_mistral_run_farm():
         # Arm monitor if auto-inject ON or Telegram configured.
         state = _load_state()
         if _should_arm_monitor(state, "mistral_auto_inject"):
-            _arm_inject_monitor("/root/mistral_inject_monitor.py", farm_pid, ts, "mistral",
+            _arm_inject_monitor(str(_monitor_path("mistral")), farm_pid, ts, "mistral",
                                 count, sorted(_before_keys_mistral))
     else:
         try:
@@ -1514,7 +1514,7 @@ def menu_dahl_run_farm():
         # Arm monitor if auto-inject ON or Telegram configured.
         state = _load_state()
         if _should_arm_monitor(state, "dahl_auto_inject"):
-            _arm_inject_monitor("/root/dahl_inject_monitor.py", farm_pid, ts, "dahl",
+            _arm_inject_monitor(str(_monitor_path("dahl")), farm_pid, ts, "dahl",
                                 count, sorted(_before_keys_dahl))
     else:
         try:
@@ -1737,6 +1737,11 @@ def _spawn_detached(cmd: list, logfile: str, cwd: str = None) -> int:
     return int(data.decode().strip())
 
 
+def _monitor_path(name: str) -> Path:
+    """Return the repo path for a monitor script."""
+    return REPO_DIR / "tools" / "tokenharbor" / "monitors" / f"{name}_inject_monitor.py"
+
+
 def _arm_inject_monitor(monitor_path: str, pid: int, ts: str, label: str,
                         count: int = 0, before_keys: list = None):
     """Spawn inject+notify monitor for a background farm PID."""
@@ -1957,9 +1962,9 @@ def menu_parallel_farm():
     # Arm monitors if auto-inject ON or Telegram configured.
     state = _load_state()
     _monitors = {
-        "TokenHarbor": ("tokenharbor_auto_inject", "/root/tokenharbor_inject_monitor.py", "tokenharbor"),
-        "Mistral": ("mistral_auto_inject", "/root/mistral_inject_monitor.py", "mistral"),
-        "Dahl": ("dahl_auto_inject", "/root/dahl_inject_monitor.py", "dahl"),
+        "TokenHarbor": ("tokenharbor_auto_inject", str(_monitor_path("tokenharbor")), "tokenharbor"),
+        "Mistral": ("mistral_auto_inject", str(_monitor_path("mistral")), "mistral"),
+        "Dahl": ("dahl_auto_inject", str(_monitor_path("dahl")), "dahl"),
     }
     for name, (pid, _) in procs.items():
         inject_key, mon_path, label = _monitors[name]

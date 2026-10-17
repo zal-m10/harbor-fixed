@@ -91,3 +91,28 @@ echo "  [1] Farm TokenHarbor -> [3] Setup email  (Tempik URL or Temp Mail)"
 echo "  [6] Setup Proxy      -> user:pass@host:port (one per line)"
 echo "  [7] Setup Bot Tele   -> Telegram notifications (optional)"
 echo "  [1] Farm TokenHarbor -> [1] Run farm"
+
+# 6. Verify critical files are in place (fresh-install smoke test).
+echo ""
+echo "[6/6] Verifying installation..."
+OK=1
+for f in "tools/tokenharbor/farm_tui.py" \
+         "tools/tokenharbor/dahl_farm.py" \
+         "tools/tokenharbor/monitors/tokenharbor_inject_monitor.py" \
+         "tools/tokenharbor/monitors/mistral_inject_monitor.py" \
+         "tools/tokenharbor/monitors/dahl_inject_monitor.py"; do
+    if [ -f "$INSTALL_DIR/$f" ]; then
+        echo "  ✓ $f"
+    else
+        echo "  ✗ MISSING: $f"
+        OK=0
+    fi
+done
+if [ -f "$INSTALL_DIR/tools/tokenharbor/monitors/tokenharbor_inject_monitor.py" ]; then
+    chmod +x "$INSTALL_DIR"/tools/tokenharbor/monitors/*.py
+fi
+if [ "$OK" -eq 1 ]; then
+    echo "All critical files present. Ready to farm."
+else
+    echo "WARNING: Some files are missing. Try: cd $INSTALL_DIR && git pull"
+fi
