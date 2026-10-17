@@ -992,14 +992,11 @@ def _inject_tokenharbor_to_9router() -> tuple:
 
 
 def _inject_mistral_to_9router() -> tuple:
-    """Inject Mistral keys into 9Router SQLite. Returns (added, skipped, error)."""
+    """Inject Mistral keys into 9Router's built-in 'mistral' provider. Returns (added, skipped, error)."""
     import sqlite3, uuid
     from datetime import datetime, timezone
     DB = '/var/lib/9router/db/data.sqlite'
-    PREFIX = 'mstrlfarm'
-    BASE_URL = 'https://api.mistral.ai/v1'
-    NODE_NAME = 'mstrlfarm'
-    DEFAULT_MODEL = 'mistral-large-4'
+    PROVIDER = 'mistral'  # built-in provider id, no custom node needed
 
     def now():
         return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000Z')
@@ -1010,32 +1007,9 @@ def _inject_mistral_to_9router() -> tuple:
         return 0, 0, f"DB open failed: {e}"
 
     try:
-        # Find existing node by baseUrl (reuse user's node regardless of prefix).
-        node_id = None
-        prefix = PREFIX
-        try:
-            row = conn.execute(
-                "SELECT id, data FROM providerNodes WHERE json_extract(data, '$.baseUrl') = ?",
-                (BASE_URL,)).fetchone()
-        except Exception:
-            row = None
-        if row:
-            node_id = row[0]
-            try:
-                prefix = (json.loads(row[1]) or {}).get('prefix') or PREFIX
-            except Exception:
-                pass
-        if not node_id:
-            node_id = f'openai-compatible-chat-{uuid.uuid4()}'
-            data = json.dumps({'prefix': PREFIX, 'apiType': 'chat', 'baseUrl': BASE_URL, 'nodeName': NODE_NAME})
-            conn.execute('INSERT INTO providerNodes (id,type,name,data,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
-                         (node_id, 'openai-compatible', NODE_NAME, data, now(), now()))
-            conn.commit()
-
-        # Existing keys
         have = set()
         try:
-            for (raw,) in conn.execute('SELECT data FROM providerConnections WHERE provider=?', (node_id,)):
+            for (raw,) in conn.execute('SELECT data FROM providerConnections WHERE provider=?', (PROVIDER,)):
                 try:
                     k = (json.loads(raw) or {}).get('apiKey')
                     if k:
@@ -1053,15 +1027,13 @@ def _inject_mistral_to_9router() -> tuple:
             if key in have:
                 skipped += 1
                 continue
-            n = conn.execute('SELECT COUNT(*) FROM providerConnections WHERE provider=?', (node_id,)).fetchone()[0] + 1
+            n = conn.execute('SELECT COUNT(*) FROM providerConnections WHERE provider=?', (PROVIDER,)).fetchone()[0] + 1
             data = json.dumps({
-                'apiKey': key, 'authType': 'apikey', 'testStatus': 'active', 'backoffLevel': 0,
-                'defaultModel': DEFAULT_MODEL,
-                'providerSpecificData': {'prefix': prefix, 'apiType': 'chat', 'baseUrl': BASE_URL,
-                                          'nodeName': NODE_NAME, 'label': email},
+                'apiKey': key, 'testStatus': 'active', 'backoffLevel': 0,
+                'providerSpecificData': {'connectionProxyEnabled': False, 'connectionProxyUrl': '', 'connectionNoProxy': ''},
             })
             conn.execute('INSERT INTO providerConnections (id,provider,authType,name,email,priority,isActive,data,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
-                         (str(uuid.uuid4()), node_id, 'apikey', f'Key {n}', None, 1, 1, data, now(), now()))
+                         (str(uuid.uuid4()), PROVIDER, 'apikey', f'Key {n}', None, 1, 1, data, now(), now()))
             conn.commit()
             have.add(key)
             added += 1
@@ -1396,13 +1368,11 @@ def _count_dahl_running() -> int:
 
 
 def _inject_dahl_to_9router() -> tuple:
-    """Inject Dahl keys into 9Router SQLite. Returns (added, skipped, error)."""
+    """Inject Dahl keys into 9Router's built-in 'dahl' provider. Returns (added, skipped, error)."""
     import sqlite3, uuid
     from datetime import datetime, timezone
     DB = '/var/lib/9router/db/data.sqlite'
-    PREFIX = 'DahlFarm'
-    BASE_URL = 'https://inference.dahl.global/v1'
-    NODE_NAME = 'dahltfarm'
+    PROVIDER = 'dahl'  # built-in provider id, no custom node needed
 
     def now():
         return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000Z')
@@ -1413,31 +1383,9 @@ def _inject_dahl_to_9router() -> tuple:
         return 0, 0, f"DB open failed: {e}"
 
     try:
-        # Find existing node by baseUrl (reuse user's node regardless of prefix).
-        node_id = None
-        prefix = PREFIX
-        try:
-            row = conn.execute(
-                "SELECT id, data FROM providerNodes WHERE json_extract(data, '$.baseUrl') = ?",
-                (BASE_URL,)).fetchone()
-        except Exception:
-            row = None
-        if row:
-            node_id = row[0]
-            try:
-                prefix = (json.loads(row[1]) or {}).get('prefix') or PREFIX
-            except Exception:
-                pass
-        if not node_id:
-            node_id = f'openai-compatible-chat-{uuid.uuid4()}'
-            data = json.dumps({'prefix': PREFIX, 'apiType': 'chat', 'baseUrl': BASE_URL, 'nodeName': NODE_NAME})
-            conn.execute('INSERT INTO providerNodes (id,type,name,data,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
-                         (node_id, 'openai-compatible', NODE_NAME, data, now(), now()))
-            conn.commit()
-
         have = set()
         try:
-            for (raw,) in conn.execute('SELECT data FROM providerConnections WHERE provider=?', (node_id,)):
+            for (raw,) in conn.execute('SELECT data FROM providerConnections WHERE provider=?', (PROVIDER,)):
                 try:
                     k = (json.loads(raw) or {}).get('apiKey')
                     if k:
@@ -1455,14 +1403,13 @@ def _inject_dahl_to_9router() -> tuple:
             if key in have:
                 skipped += 1
                 continue
-            n = conn.execute('SELECT COUNT(*) FROM providerConnections WHERE provider=?', (node_id,)).fetchone()[0] + 1
+            n = conn.execute('SELECT COUNT(*) FROM providerConnections WHERE provider=?', (PROVIDER,)).fetchone()[0] + 1
             data = json.dumps({
-                'apiKey': key, 'authType': 'apikey', 'testStatus': 'active', 'backoffLevel': 0,
-                'providerSpecificData': {'prefix': prefix, 'apiType': 'chat', 'baseUrl': BASE_URL,
-                                          'nodeName': NODE_NAME, 'label': username},
+                'apiKey': key, 'testStatus': 'active', 'backoffLevel': 0,
+                'providerSpecificData': {'connectionProxyEnabled': False, 'connectionProxyUrl': '', 'connectionNoProxy': ''},
             })
             conn.execute('INSERT INTO providerConnections (id,provider,authType,name,email,priority,isActive,data,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
-                         (str(uuid.uuid4()), node_id, 'apikey', f'Key {n}', None, 1, 1, data, now(), now()))
+                         (str(uuid.uuid4()), PROVIDER, 'apikey', f'Key {n}', None, 1, 1, data, now(), now()))
             conn.commit()
             have.add(key)
             added += 1
