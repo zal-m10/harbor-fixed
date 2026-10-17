@@ -242,12 +242,10 @@ def _status_line(state: dict, proxies: list, tempik, capsolver) -> None:
     def dot(ok: bool) -> str:
         return "[bright_green]●[/bright_green]" if ok else "[bright_red]●[/bright_red]"
     proxy_txt = f"{len(proxies)} proxies" if proxies else "no proxy"
-    email_provider = state.get("tokenharbor_email_provider", "tempik")
-    capsolver_on = state.get("capsolver_enabled", bool(capsolver))
     console.print(
         f"{dot(bool(proxies))} [white]{proxy_txt}[/white]   "
-        f"{dot(True)} [white]email:{email_provider}[/white]   "
-        f"{dot(capsolver_on)} [white]capsolver[/white]   "
+        f"{dot(bool(tempik))} [white]tempik[/white]   "
+        f"{dot(bool(capsolver))} [white]capsolver[/white]   "
         f"[dim]│[/dim]   [dim]delay[/dim] [cyan]{state['delay']}s[/cyan]",
         justify="center",
     )
@@ -267,38 +265,20 @@ def _set_capsolver(key: str) -> None:
 
 def menu_setup_capsolver():
     _clear_screen(); _harbor_header()
-    state = _load_state()
-    enabled = state.get("capsolver_enabled", bool(_get_capsolver()))
     current = _get_capsolver()
     masked = (current[:8] + "..." if current else "-")
-    status = "[green]ON[/green]" if enabled else "[dim]OFF[/dim]"
-    console.print(f"\nCapsolver: {status}")
-    console.print(f"Current key: [cyan]{masked}[/cyan]\n")
-    console.print("[1] Toggle ON/OFF")
-    console.print("[2] Set API key")
-    console.print("[3] Clear key")
-    console.print("[0] Back\n")
-    choice = Prompt.ask("Select", choices=["0", "1", "2", "3"],
-                        default="1", show_choices=False)
-    if choice == "1":
-        state["capsolver_enabled"] = not enabled
-        _save_state(state)
-        console.print(f"[green]Capsolver {'disabled' if enabled else 'enabled'}.[/green]")
-    elif choice == "2":
-        val = Prompt.ask("Enter Capsolver API key (empty to cancel)", password=True)
-        if val.strip():
-            _set_capsolver(val)
-            state["capsolver_enabled"] = True
-            _save_state(state)
-            console.print("[green]Capsolver key saved and enabled.[/green]")
-    elif choice == "3":
+    console.print(f"\nCurrent Capsolver key: [cyan]{masked}[/cyan]\n")
+    val = Prompt.ask("Enter Capsolver API key (empty to clear, 'q' to cancel)",
+                     password=True)
+    if val.lower() == "q":
+        return
+    if not val.strip():
         if CAPSOLVER_PATH.exists():
             CAPSOLVER_PATH.unlink()
-        state["capsolver_enabled"] = False
-        _save_state(state)
-        console.print("[yellow]Capsolver key cleared and disabled.[/yellow]")
+        console.print("[yellow]Capsolver key cleared.[/yellow]")
     else:
-        return
+        _set_capsolver(val)
+        console.print("[green]Capsolver key saved.[/green]")
     Prompt.ask("\nPress Enter to continue", default="")
 
 
@@ -463,34 +443,14 @@ def _curses_multiselect(title: str, items: list) -> list | None:
 
 def menu_setup_tempik():
     _clear_screen(); _harbor_header()
-    state = _load_state()
-    provider = state.get("tokenharbor_email_provider", "tempik")
     current = _get_tempik_url()
-    console.print(f"\nEmail provider: [cyan]{provider}[/cyan]")
-    console.print(f"Tempik URL: [cyan]{current or '-'}[/cyan]\n")
-    console.print("[1] Use Tempik (your own domain)")
-    console.print("[2] Use Temp Mail (tempmail.lol, no setup needed)")
-    console.print("[3] Set Tempik URL")
-    console.print("[0] Back\n")
-    choice = Prompt.ask("Select", choices=["0", "1", "2", "3"],
-                        default="1", show_choices=False)
-    if choice == "1":
-        state["tokenharbor_email_provider"] = "tempik"
-        _save_state(state)
-        console.print("[green]Email provider set to Tempik.[/green]")
-    elif choice == "2":
-        state["tokenharbor_email_provider"] = "tempmail"
-        _save_state(state)
-        console.print("[green]Email provider set to Temp Mail.[/green]")
-    elif choice == "3":
-        val = Prompt.ask("Enter Tempik base URL ('q' to cancel)")
-        if val.lower() == "q":
-            return
-        if val.strip():
-            _set_tempik_url(val.strip().rstrip("/"))
-            console.print("[green]Tempik URL saved.[/green]")
-    else:
+    console.print(f"\nCurrent Tempik URL: [cyan]{current or '-'}[/cyan]\n")
+    val = Prompt.ask("Enter Tempik base URL ('q' to cancel)")
+    if val.lower() == "q":
         return
+    if val.strip():
+        _set_tempik_url(val.strip().rstrip("/"))
+        console.print("[green]Tempik URL saved.[/green]")
     Prompt.ask("\nPress Enter to continue", default="")
 
 
@@ -508,11 +468,20 @@ def menu_delay_setting():
 
 def menu_run_farm():
     _clear_screen(); _harbor_header()
-    # Tempik and Capsolver are both optional: the farm also runs with
-    # Temp Mail (tempmail.lol) and without any captcha solver.
-    state = _load_state()
-    email_provider = state.get("tokenharbor_email_provider", "tempik")
-    capsolver_enabled = state.get("capsolver_enabled", bool(_get_capsolver()))
+    # Pre-flight checks.
+    tempik = _get_tempik_url()
+    if not tempik:
+        console.print("\n[red]✗ Tempik URL is not set.[/red]")
+        console.print("Set it first via [cyan]Setup tempik[/cyan] menu.")
+        Prompt.ask("\nPress Enter to continue", default="")
+        return
+
+    capsolver = _get_capsolver()
+    if not capsolver:
+        console.print("\n[red]✗ Capsolver key is not set.[/red]")
+        console.print("Set it first via [cyan]Setup capsolver key[/cyan] menu.")
+        Prompt.ask("\nPress Enter to continue", default="")
+        return
 
     proxies = _get_proxies()
     if not proxies:
@@ -525,12 +494,10 @@ def menu_run_farm():
     else:
         proxy_info = f"{len(proxies)} (rotating)"
 
+    state = _load_state()
     count = IntPrompt.ask("\nHow many accounts to farm?", default=1)
     delay = state.get("delay", DEFAULT_DELAY)
-    email_label = ("Temp Mail (tempmail.lol)" if email_provider == "tempmail"
-                   else f"Tempik ({_get_tempik_url() or 'URL not set'})")
-    console.print(f"\n[dim]Email: {email_label}[/dim]")
-    console.print(f"[dim]Capsolver: {'ON' if capsolver_enabled else 'OFF'}[/dim]")
+    console.print(f"\n[dim]Tempik: {tempik}[/dim]")
     console.print(f"[dim]Proxy: {proxy_info}[/dim]")
     console.print(f"[dim]Delay: {delay}s[/dim]\n")
 
@@ -553,8 +520,7 @@ def menu_run_farm():
     venv_python = REPO_DIR / ".venv" / "bin" / "python"
     py = str(venv_python) if venv_python.exists() else sys.executable
     cmd = [py, "-m", "tools.tokenharbor.cli", "browser-farm",
-           "--count", str(count), "--delay", str(delay),
-           "--email-provider", email_provider]
+           "--count", str(count), "--delay", str(delay)]
 
     if bg_choice == "2":
         import datetime as _dt
@@ -845,10 +811,8 @@ def menu_tokenharbor():
         menu.add_column("hint", style="dim")
         menu.add_row("[1]", "Run farm", "start farming accounts")
         menu.add_row("[2]", "Results", "view farmed accounts")
-        _email_provider = state.get("tokenharbor_email_provider", "tempik")
-        _capsolver_on = state.get("capsolver_enabled", bool(capsolver))
-        menu.add_row("[3]", "Setup email", f"currently: {_email_provider}")
-        menu.add_row("[4]", "Setup capsolver", f"currently: {'ON' if _capsolver_on else 'OFF'}")
+        menu.add_row("[3]", "Setup tempik", "disposable email URL")
+        menu.add_row("[4]", "Setup capsolver key", "captcha solver API key")
         menu.add_row("[5]", "Auto inject 9Router", f"currently {('ON' if th_inject_on else 'OFF')}")
         menu.add_row("[0]", "Back", "")
         console.print(menu, justify="center")
@@ -1911,8 +1875,7 @@ def menu_parallel_farm():
     if "TokenHarbor" in counts:
         py = str(venv_python) if venv_python.exists() else sys.executable
         th_cmd = [py, "-m", "tools.tokenharbor.cli", "browser-farm",
-                  "--count", str(counts["TokenHarbor"]), "--delay", str(delay),
-                  "--email-provider", state.get("tokenharbor_email_provider", "tempik")]
+                  "--count", str(counts["TokenHarbor"]), "--delay", str(delay)]
         th_log = f"/tmp/farm-{ts}.log"
         th_pid = _spawn_detached(th_cmd, th_log, cwd=str(REPO_DIR))
         procs["TokenHarbor"] = (th_pid, th_log)
@@ -2074,6 +2037,27 @@ _INJECT_STATE_KEYS = {
 }
 
 
+def _proxy_summary() -> str:
+    """Return a safe proxy summary for notifications (no credentials)."""
+    try:
+        proxies = _get_proxies()
+    except Exception:
+        return "no proxy"
+    if not proxies:
+        return "no proxy"
+    # Mask credentials, show only host.
+    hosts = []
+    for p in proxies[:3]:
+        # Format: user:pass@host:port or host:port
+        host = p.split("@")[-1] if "@" in p else p
+        # Remove user:pass prefix if present without @
+        if host.count(":") > 1:
+            host = ":".join(host.split(":")[-2:])
+        hosts.append(host)
+    more = f" +{len(proxies)-3}" if len(proxies) > 3 else ""
+    return f"{len(proxies)} proxy ({', '.join(hosts)}{more})"
+
+
 def _notify_farm_done(provider: str, total: int, success: int, failed: int,
                       keys: list = None, progress: str = None):
     """Send farm completion notification to Telegram if configured.
@@ -2097,6 +2081,7 @@ def _notify_farm_done(provider: str, total: int, success: int, failed: int,
         escaped = "\n".join(_html.escape(k) for k in keys)
         text += f"<pre>{escaped}</pre>\n"
     text += f"\nAuto inject 9Router: <b>{inject_txt}</b>"
+    text += f"\nProxy: {_proxy_summary()}"
     ok, msg = _send_telegram(text)
     return ok
 
