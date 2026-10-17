@@ -33,6 +33,13 @@ MISTRAL_KEYS = Path("/root/mistral_keys.txt")
 DAHL_SCRIPT = Path("/root/dahl_farm.py")
 DAHL_KEYS = Path("/root/dahl_keys.txt")
 
+def _resolve_script(path: Path, repo_fallback: str) -> Path:
+    """Return path if it exists, else repo fallback if that exists."""
+    if path.exists():
+        return path
+    fb = REPO_DIR / repo_fallback
+    return fb if fb.exists() else path
+
 DEFAULT_DELAY = 60
 
 
@@ -1082,7 +1089,8 @@ def _count_mistral_running() -> int:
 def menu_mistral_run_farm():
     _clear_screen(); _mistral_header()
     console.print()
-    if not MISTRAL_SCRIPT.exists():
+    _mistral_script = _resolve_script(MISTRAL_SCRIPT, "tools/tokenharbor/mistral_farm.py")
+    if not _mistral_script.exists():
         console.print(f"[red]✗ Mistral farm script not found: {MISTRAL_SCRIPT}[/red]")
         Prompt.ask("\nPress Enter to continue", default="")
         return
@@ -1096,7 +1104,7 @@ def menu_mistral_run_farm():
 
     count = IntPrompt.ask("\nHow many keys to farm?", default=1)
     console.print(f"\n[dim]Proxy: {len(proxies)} (rotating)[/dim]")
-    console.print(f"[dim]Script: {MISTRAL_SCRIPT}[/dim]\n")
+    console.print(f"[dim]Script: {_mistral_script}[/dim]\n")
 
     if not Confirm.ask(f"Start farming {count} Mistral key(s)?", default=True):
         return
@@ -1112,7 +1120,7 @@ def menu_mistral_run_farm():
     bg_choice = Prompt.ask("Mode", choices=["1", "2"], default="1",
                            show_choices=False)
 
-    cmd = [sys.executable, str(MISTRAL_SCRIPT), "--count", str(count)]
+    cmd = [sys.executable, str(_mistral_script), "--count", str(count)]
     if bg_choice == "2":
         import datetime as _dt
         ts = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -1471,13 +1479,14 @@ def _inject_dahl_to_9router() -> tuple:
 def menu_dahl_run_farm():
     _clear_screen(); _dahl_header()
     console.print()
-    if not DAHL_SCRIPT.exists():
+    _dahl_script = _resolve_script(DAHL_SCRIPT, "tools/tokenharbor/dahl_farm.py")
+    if not _dahl_script.exists():
         console.print(f"[red]✗ Dahl farm script not found: {DAHL_SCRIPT}[/red]")
         Prompt.ask("\nPress Enter to continue", default="")
         return
 
     count = IntPrompt.ask("\nHow many keys to farm?", default=1)
-    console.print(f"\n[dim]Script: {DAHL_SCRIPT}[/dim]")
+    console.print(f"\n[dim]Script: {_dahl_script}[/dim]")
     console.print("[dim]Pure HTTP — no browser, no email, no captcha.[/dim]\n")
 
     if not Confirm.ask(f"Start farming {count} Dahl key(s)?", default=True):
@@ -1494,7 +1503,7 @@ def menu_dahl_run_farm():
     bg_choice = Prompt.ask("Mode", choices=["1", "2"], default="1",
                            show_choices=False)
 
-    cmd = [sys.executable, str(DAHL_SCRIPT), "--count", str(count)]
+    cmd = [sys.executable, str(_dahl_script), "--count", str(count)]
     if bg_choice == "2":
         import datetime as _dt
         ts = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -1848,20 +1857,25 @@ def menu_parallel_farm():
         ["TokenHarbor", "Mistral", "Dahl"]) if name in chosen]
 
     # Validate prerequisites per selected farm.
-    tempik = _get_tempik_url()
-    capsolver = _get_capsolver()
     state = _load_state()
     delay = state.get("delay", DEFAULT_DELAY)
     problems = []
     if any(name == "TokenHarbor" for _, name in selected):
-        if not tempik or not capsolver:
-            problems.append("TokenHarbor needs Tempik URL + Capsolver key.")
+        # TokenHarbor can run without Tempik/Capsolver (uses tempmail + browser auto-verify).
+        # Show warnings but do not block.
         venv_python = REPO_DIR / ".venv" / "bin" / "python"
+        email_prov = state.get("tokenharbor_email_provider", "tempmail")
+        if email_prov == "tempik" and not _get_tempik_url():
+            console.print("[yellow]⚠ Tempik URL not set — farm may fail at email step.[/yellow]")
+        if not _get_capsolver():
+            console.print("[yellow]⚠ Capsolver key not set — relying on browser auto-verify.[/yellow]")
     if any(name == "Mistral" for _, name in selected):
-        if not MISTRAL_SCRIPT.exists():
+        _ms = _resolve_script(MISTRAL_SCRIPT, "tools/tokenharbor/mistral_farm.py")
+        if not _ms.exists():
             problems.append(f"Mistral script not found: {MISTRAL_SCRIPT}")
     if any(name == "Dahl" for _, name in selected):
-        if not DAHL_SCRIPT.exists():
+        _ds = _resolve_script(DAHL_SCRIPT, "tools/tokenharbor/dahl_farm.py")
+        if not _ds.exists():
             problems.append(f"Dahl script not found: {DAHL_SCRIPT}")
     if problems:
         for p in problems:
@@ -1919,7 +1933,8 @@ def menu_parallel_farm():
 
     # Mistral farm
     if "Mistral" in counts:
-        mistral_cmd = [sys.executable, str(MISTRAL_SCRIPT),
+        _ms = _resolve_script(MISTRAL_SCRIPT, "tools/tokenharbor/mistral_farm.py")
+        mistral_cmd = [sys.executable, str(_ms),
                        "--count", str(counts["Mistral"])]
         mistral_log = f"/tmp/mistral-farm-{ts}.log"
         mistral_pid = _spawn_detached(mistral_cmd, mistral_log)
@@ -1927,7 +1942,8 @@ def menu_parallel_farm():
 
     # Dahl farm
     if "Dahl" in counts:
-        dahl_cmd = [sys.executable, str(DAHL_SCRIPT),
+        _ds = _resolve_script(DAHL_SCRIPT, "tools/tokenharbor/dahl_farm.py")
+        dahl_cmd = [sys.executable, str(_ds),
                     "--count", str(counts["Dahl"])]
         dahl_log = f"/tmp/dahl-farm-{ts}.log"
         dahl_pid = _spawn_detached(dahl_cmd, dahl_log)
