@@ -191,14 +191,27 @@ def browser_signup(email: str, password: str,
             browser.close()
 
 
+def _make_email_client(provider: str = "tempik"):
+    """Create the disposable-email client for the chosen provider.
+
+    tempik   -> TempikClient (user's own Tempik instance)
+    tempmail -> TempMailLolClient (tempmail.lol, no setup needed)
+    """
+    if provider == "tempmail":
+        from .tempmail_lol import TempMailLolClient
+        return TempMailLolClient()
+    from .tempik import TempikClient
+    return TempikClient()
+
+
 def auto_farm_one(client, headless: bool = True,
-                  proxy: Optional[str] = None) -> dict:
-    """Full automated pipeline: Tempik email -> browser signup ->
+                  proxy: Optional[str] = None,
+                  email_provider: str = "tempik") -> dict:
+    """Full automated pipeline: disposable email -> browser signup ->
     verify -> login -> API key -> free models. Returns account dict."""
     import re as _re
-    from .tempik import TempikClient
 
-    t = TempikClient()
+    t = _make_email_client(email_provider)
     inbox = t.create_inbox()
     email = inbox["address"] if isinstance(inbox, dict) else inbox
     password = _gen_password()
